@@ -12,7 +12,7 @@
   <link rel="stylesheet" href="css/app.css">
 </head>
 <body>
-  <div id="app" class="app"></div>
+  <div id="app" class="app"><p style="padding:24px;color:#7B8594">載入中…</p></div>
   <nav id="tabbar" class="tabbar" aria-label="主選單" hidden></nav>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <div id="layer" class="layer" hidden></div>
@@ -21,5 +21,21 @@
   <script src="js/mock.js"></script>
   <script src="js/api.js"></script>
   <script src="js/app.js"></script>
+  <script>
+    // 自我檢查：檔案沒上傳完整或 config.js 打錯字時，顯示原因而不是空白頁
+    setTimeout(function () {
+      if (window.__appStarted && window.Api) return;
+      var missing = [];
+      if (!window.APP_CONFIG) missing.push('js/config.js（檔案不存在，或內容打錯字：例如全形引號、少了逗號）');
+      if (!window.Mock) missing.push('js/mock.js');
+      if (!window.Api) missing.push('js/api.js');
+      if (!window.__appStarted) missing.push('js/app.js');
+      document.getElementById('app').innerHTML =
+        '<div style="padding:24px;font:16px/1.7 sans-serif;color:#13243A">' +
+        '<p style="font-size:18px;font-weight:700;margin:0 0 8px">網頁檔案不完整，無法啟動</p>' +
+        '<p style="margin:0 0 8px">讀取失敗：</p><ul style="margin:0 0 12px;padding-left:20px"><li>' + missing.join('</li><li>') + '</li></ul>' +
+        '<p style="margin:0;color:#44505F">請確認網站上 index.html 旁邊有 <b>css</b> 和 <b>js</b> 兩個資料夾，裡面各有檔案。</p></div>';
+    }, 5000);
+  </script>
 </body>
 </html>
