@@ -355,8 +355,7 @@
       return '<section class="mcard" aria-label="會員證">' + contours() + org +
         '<div class="mcard-name">' + esc(m.name) + '</div>' +
         '<div class="mcard-sub">' + esc([m.title, m.company].filter(Boolean).join('　')) + '</div>' +
-        '<dl class="mcard-meta"><div><dt>會員編號</dt><dd>' + esc(m.id) + '</dd></div>' +
-        (m.joinYear ? '<div><dt>入會</dt><dd>' + esc(m.joinYear) + '</dd></div>' : '') + '</dl></section>';
+        (m.joinYear ? '<dl class="mcard-meta"><div><dt>入會</dt><dd>' + esc(m.joinYear) + '</dd></div></dl>' : '') + '</section>';
     }
     var body;
     if (me.disabled) body = '<p class="mcard-note">這個 LINE 帳號對應的會員目前停用中，請洽秘書處。</p>';
