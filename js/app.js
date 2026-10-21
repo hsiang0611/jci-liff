@@ -158,6 +158,11 @@
     return '<svg class="ic' + (cls ? ' ' + cls : '') + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + inner + '</svg>';
   }
 
+  /** 會徽：圖片讀不到時自動隱藏，不影響旁邊的文字 */
+  function logo(cls) {
+    return '<img class="' + cls + '" src="img/logo.png" alt="" onerror="this.hidden=true">';
+  }
+
   function avatar(me, size) {
     size = size || 36;
     var name = me ? ((me.member && me.member.name) || me.lineName || '') : '';
@@ -268,7 +273,7 @@
       return '<header class="topbar is-sub"><button type="button" class="iconbtn" data-act="back" data-parent="' + esc(o.back) + '" aria-label="返回">' +
         icon('back') + '</button><div class="topbar-title">' + esc(o.title || '') + '</div><div class="topbar-actions">' + (o.actions || '') + '</div></header>';
     }
-    return '<header class="topbar"><div class="brand"><span class="brand-mark" aria-hidden="true">龍</span><span>' + esc(CFG.ORG_SHORT || '會員專區') +
+    return '<header class="topbar"><div class="brand">' + logo('brand-logo') + '<span class="brand-name">' + esc(CFG.ORG_NAME || '會員專區') +
       '</span></div><div class="topbar-actions"><button type="button" class="iconbtn" data-act="refresh" aria-label="重新整理">' + icon('refresh') +
       '</button><button type="button" class="avatar-btn" data-tab="me" aria-label="我的">' + avatar(S.me, 32) + '</button></div></header>';
   }
@@ -348,7 +353,7 @@
 
   function memberCard() {
     var me = S.me;
-    var org = '<div class="mcard-top"><span class="mcard-org">' + esc(CFG.ORG_NAME || '') + '</span>' +
+    var org = '<div class="mcard-top"><span class="mcard-org">會員證</span>' +
       '<span class="mcard-role">' + esc(me.role) + '</span></div>';
     if (me.member) {
       var m = me.member;
@@ -802,7 +807,7 @@
   function linePreview(p) {
     var labels = { home: '開啟會員專區', event: '查看活動', news: '閱讀全文', url: '開啟連結' };
     var btn = p.linkType !== 'none' ? '<div class="lp-foot"><span class="lp-btn">' + labels[p.linkType] + '</span></div>' : '';
-    return '<div class="lp" aria-label="LINE 訊息預覽"><span class="lp-avatar" aria-hidden="true">龍</span><div class="lp-bubble"><div class="lp-body">' +
+    return '<div class="lp" aria-label="LINE 訊息預覽"><span class="lp-avatar">' + logo('') + '</span><div class="lp-bubble"><div class="lp-body">' +
       '<div class="lp-org">' + esc(CFG.ORG_NAME) + '</div><div class="lp-title">' + (esc(p.title) || '<span class="muted">（標題）</span>') + '</div>' +
       '<div class="lp-text">' + (esc(p.text).replace(/\n/g, '<br>') || '<span class="muted">（內容）</span>') + '</div></div>' + btn + '</div></div>';
   }
@@ -1539,13 +1544,13 @@
   /* ═════════════ 啟動 ═════════════ */
 
   function bootScreen() {
-    return '<div class="boot"><span class="brand-mark big" aria-hidden="true">龍</span><p>' + esc(CFG.ORG_NAME || '') + '</p><span class="spinner" aria-label="載入中"></span></div>';
+    return '<div class="boot">' + logo('brand-logo big') + '<p>' + esc(CFG.ORG_NAME || '') + '</p><span class="spinner" aria-label="載入中"></span></div>';
   }
   function fatal(e) {
     var msg = e && e.message ? e.message : String(e);
     var hint = '';
     if (e && (e.code === 'NOT_CONFIGURED' || e.code === 'NO_SHEET' || e.code === 'NO_SPREADSHEET')) hint = '後端尚未設定完成，請通知秘書處。';
-    $app.innerHTML = '<div class="boot"><span class="brand-mark big" aria-hidden="true">龍</span><p class="empty-title">無法開啟會員專區</p><p>' + esc(msg) + '</p>' +
+    $app.innerHTML = '<div class="boot">' + logo('brand-logo big') + '<p class="empty-title">無法開啟會員專區</p><p>' + esc(msg) + '</p>' +
       (hint ? '<p class="muted">' + hint + '</p>' : '') + '<button type="button" class="btn btn-primary" onclick="location.reload()">重新載入</button></div>';
   }
 
