@@ -584,6 +584,25 @@ input[type=radio], input[type=checkbox] { width: 20px; height: 20px; accent-colo
 .checkin-ok span { font-size: 14px; color: var(--ink-2); }
 @keyframes pop { from { transform: scale(.6); opacity: 0; } to { transform: none; opacity: 1; } }
 
+/* ── 同意顯示電話 ── */
+.consent-row { display: flex; align-items: center; gap: 12px; margin-top: 14px; padding: 12px 12px 12px 14px; border-radius: var(--r-sm); background: var(--paper); border: 1px solid var(--line); }
+.consent-row > div { flex: 1; min-width: 0; display: flex; gap: 10px; align-items: flex-start; }
+.consent-row > div > .ic { color: var(--muted); margin-top: 2px; }
+.consent-row > div > div { display: flex; flex-direction: column; }
+.consent-row b { font-size: 15px; font-weight: 600; }
+.consent-row span { font-size: 13px; color: var(--muted); }
+.consent-row.is-on { background: var(--ok-soft); border-color: #C3E6D3; }
+.consent-row.is-on > div > .ic, .consent-row.is-on b { color: var(--ok); }
+.terms { max-height: 40vh; overflow-y: auto; -webkit-overflow-scrolling: touch; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 14px 16px; font-size: 14.5px; line-height: 1.75; color: var(--ink); }
+.terms-head { font-weight: 700; margin-bottom: 8px; }
+.terms ol { margin: 0; padding-left: 1.4em; }
+.terms li + li { margin-top: 8px; }
+.terms li b { display: block; color: var(--harbor-deep); }
+.terms-end { text-align: center; color: var(--muted); font-size: 13px; margin-top: 14px; }
+.check.is-gated { opacity: .55; }
+.check.is-gated input { cursor: not-allowed; }
+#terms-hint { margin: 8px 0 10px; }
+
 /* ── 我的資料、出席 ── */
 .profile-card .block-head { margin-bottom: 6px; }
 .kv { margin: 0; display: grid; gap: 6px; font-size: 15px; }
