@@ -19,6 +19,7 @@
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <div id="layer" class="layer" hidden></div>
 
+  <script src="js/qrcode.js"></script>
   <script src="js/config.js"></script>
   <script src="js/mock.js"></script>
   <script src="js/api.js"></script>
@@ -36,7 +37,7 @@
         '<div style="padding:24px;font:16px/1.7 sans-serif;color:#13243A">' +
         '<p style="font-size:18px;font-weight:700;margin:0 0 8px">網頁檔案不完整，無法啟動</p>' +
         '<p style="margin:0 0 8px">讀取失敗：</p><ul style="margin:0 0 12px;padding-left:20px"><li>' + missing.join('</li><li>') + '</li></ul>' +
-        '<p style="margin:0;color:#44505F">請確認網站上 index.html 旁邊有 <b>css</b> 和 <b>js</b> 兩個資料夾，裡面各有檔案。</p></div>';
+        '<p style="margin:0;color:#44505F">請確認網站上 index.html 旁邊有 <b>css</b>、<b>js</b>、<b>img</b> 三個資料夾，裡面各有檔案。</p></div>';
     }, 5000);
   </script>
 </body>
