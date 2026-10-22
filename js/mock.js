@@ -34,6 +34,8 @@ window.Mock = (function () {
 
   var EVENT_CATS = ['例會', '理監事會', '訓練', '公益服務', '聯誼', '國際交流', '其他'];
   var NEWS_CATS = ['會務公告', '活動花絮', '會員動態', '國際青商', '其他'];
+  var DOC_CATS = ['章程規章', '會議紀錄', '行事曆', '表單', '簡報資料', '其他'];
+  var INDUSTRIES = ['營造工程', '製造業', '餐飲', '零售批發', '金融保險', '不動產', '醫療保健', '教育', '資訊科技', '設計行銷', '運輸物流', '農林漁牧', '法律會計', '服務業', '其他'];
 
   var db, current = '管理員', friend = {};
 
@@ -60,23 +62,25 @@ window.Mock = (function () {
   function normName(v) { return String(v || '').replace(/[\s　]+/g, ''); }
 
   function seed() {
-    var m = function (id, name, phone, role, title, company, year, uid) {
-      return { id: id, name: name, phone: phone, role: role, title: title, company: company, email: '',
-        joinYear: year, status: '啟用', lineUid: uid || '', lineName: '', boundAt: uid ? at(-60, 10) : '' };
+    var thisMonth = new Date().getMonth() + 1;
+    var m = function (id, name, phone, role, title, company, year, uid, industry, bday) {
+      return { id: id, name: name, phone: phone, role: role, title: title, company: company, industry: industry || '', email: '',
+        birthday: bday || '', joinYear: year, status: '啟用', lineUid: uid || '', lineName: '', boundAt: uid ? at(-60, 10) : '' };
     };
+    var md = function (d) { return '1990-' + (thisMonth < 10 ? '0' : '') + thisMonth + '-' + (d < 10 ? '0' : '') + d; };
     db = {
       members: [
-        m('M001', '王建宏', '0912000001', '管理員', '會長', '建宏營造有限公司', '2016', 'U-demo-01'),
-        m('M002', '陳怡君', '0912000002', '管理員', '秘書長', '怡君會計師事務所', '2019', 'U-demo-02'),
-        m('M003', '李承翰', '0912000003', '幹部', '副會長', '承翰汽車美容', '2018', 'U-demo-03'),
-        m('M004', '蔡宜蓁', '0912000004', '幹部', '理事', '蓁好烘焙坊', '2020', 'U-demo-04'),
-        m('M005', '林志豪', '0912000005', '會員', '', '志豪水電行', '2022', 'U-demo-05'),
-        m('M006', '吳佩珊', '0912000006', '會員', '公關主委', '珊珊花藝', '2023', 'U-demo-06'),
-        m('M007', '黃國明', '0912000007', '特友', '特友會長', '國明茶行', '2008', 'U-demo-07'),
-        m('M008', '張雅婷', '0912000008', '預備會員', '', '雅婷設計工作室', '2026', 'U-demo-08'),
-        m('M009', '鄭凱文', '0912000009', '會員', '', '凱文咖啡', '2024', ''),
-        m('M010', '劉家瑋', '0912000010', '會員', '', '家瑋保險經紀', '2021', ''),
-        m('M011', '許文彥', '0912000011', '特友', '', '文彥土地代書', '2009', 'U-demo-11')
+        m('M001', '王建宏', '0912000001', '管理員', '會長', '建宏營造有限公司', '2016', 'U-demo-01', '營造工程', '1988-03-12'),
+        m('M002', '陳怡君', '0912000002', '管理員', '秘書長', '怡君會計師事務所', '2019', 'U-demo-02', '法律會計', md(new Date().getDate())),
+        m('M003', '李承翰', '0912000003', '幹部', '副會長', '承翰汽車美容', '2018', 'U-demo-03', '服務業', '1990-07-08'),
+        m('M004', '蔡宜蓁', '0912000004', '幹部', '理事', '蓁好烘焙坊', '2020', 'U-demo-04', '餐飲', md(21)),
+        m('M005', '林志豪', '0912000005', '會員', '', '志豪水電行', '2022', 'U-demo-05', '營造工程', '1993-11-20'),
+        m('M006', '吳佩珊', '0912000006', '會員', '公關主委', '珊珊花藝', '2023', 'U-demo-06', '零售批發', md(5)),
+        m('M007', '黃國明', '0912000007', '特友', '特友會長', '國明茶行', '2008', 'U-demo-07', '零售批發', '1975-05-30'),
+        m('M008', '張雅婷', '0912000008', '預備會員', '', '雅婷設計工作室', '2026', 'U-demo-08', '設計行銷', ''),
+        m('M009', '鄭凱文', '0912000009', '會員', '', '凱文咖啡', '2024', '', '餐飲', '1995-01-05'),
+        m('M010', '劉家瑋', '0912000010', '會員', '', '家瑋保險經紀', '2021', '', '金融保險', ''),
+        m('M011', '許文彥', '0912000011', '特友', '', '文彥土地代書', '2009', 'U-demo-11', '不動產', '1979-09-09')
       ],
       events: [
         ev('E1', monthOf(5) + '月份月例會', '例會', at(5, 19), at(5, 21, 30), '龍井區公所 3 樓禮堂', '會員', at(3, 23, 59), 0, '會員免費，眷屬每位 300 元',
@@ -89,11 +93,20 @@ window.Mock = (function () {
           '邀請連鎖餐飲創辦人分享展店心法，現場有 Q&A。'),
         ev('E5', '年度會員大會暨會長交接', '例會', at(46, 17, 30), at(46, 21), '台中港區飯店宴會廳', '預備會員', at(35, 23, 59), 220, '每位 1,200 元',
           '一年一度的大會，歡迎眷屬一同參加。'),
-        ev('E6', monthOf(-16) + '月份月例會', '例會', at(-16, 19), at(-16, 21, 30), '龍井區公所 3 樓禮堂', '會員', '', 0, '', ''),
-        ev('E7', '中秋聯誼烤肉', '聯誼', at(-30, 17), at(-30, 21), '竹坑南寮登山步道入口廣場', '訪客', '', 0, '', ''),
+        ev('E6', monthOf(-16) + '月份月例會', '例會', at(-16, 19), at(-16, 21, 30), '龍井區公所 3 樓禮堂', '會員', '', 0, '', '', '', 'https://photos.app.goo.gl/demo-meeting'),
+        ev('E7', '中秋聯誼烤肉', '聯誼', at(-30, 17), at(-30, 21), '竹坑南寮登山步道入口廣場', '訪客', '', 0, '', '', '', 'https://photos.app.goo.gl/demo-bbq'),
+        ev('E9', '今天：會務幹部交流茶會', '聯誼', at(0, new Date().getHours(), 0), at(0, Math.min(23, new Date().getHours() + 2), 0), '會館', '會員', '', 0, '免費', '示範掃碼報到用：活動進行中，可以在活動頁開啟報到 QR。'),
         ev('E8', '國際青商週：日本姊妹會來訪接待', '國際交流', at(60, 10), at(60, 16), '待定', '會員', '', 0, '', '草稿，行程確認中。', '草稿')
       ],
       regs: [],
+      docs: [
+        { id: 'D1', title: '龍井國際青年商會章程', category: '章程規章', url: 'https://drive.google.com/file/d/demo-charter', description: '2025 年會員大會修訂版', audience: '會員', status: '發布', createdBy: '陳怡君', updatedAt: at(-40, 10) },
+        { id: 'D2', title: '會員權利義務須知', category: '章程規章', url: 'https://drive.google.com/file/d/demo-rights', description: '', audience: '預備會員', status: '發布', createdBy: '陳怡君', updatedAt: at(-40, 10) },
+        { id: 'D3', title: '第 10 次理監事會議紀錄', category: '會議紀錄', url: 'https://drive.google.com/file/d/demo-minutes-10', description: '含預算追加決議', audience: '幹部', status: '發布', createdBy: '陳怡君', updatedAt: at(-12, 10) },
+        { id: 'D4', title: '2026 年度行事曆', category: '行事曆', url: 'https://drive.google.com/file/d/demo-calendar', description: '例會、理監事會、公益服務日期', audience: '訪客', status: '發布', createdBy: '陳怡君', updatedAt: at(-200, 10) },
+        { id: 'D5', title: '會服訂購單', category: '表單', url: 'https://forms.gle/demo-uniform', description: '11/30 截止', audience: '會員', status: '發布', createdBy: '吳佩珊', updatedAt: at(-3, 10) },
+        { id: 'D6', title: '入會申請書', category: '表單', url: 'https://drive.google.com/file/d/demo-join', description: '請列印填寫後交給秘書處', audience: '訪客', status: '發布', createdBy: '陳怡君', updatedAt: at(-100, 10) }
+      ],
       news: [
         nw('N1', '2027 年度會費繳交通知', '會務公告', '2027 年度會費每位 6,000 元，請於 12 月 31 日前繳交。\n\n轉帳：土地銀行龍井分行\n戶名：龍井國際青年商會\n\n也可在例會現場交給財務長。', '會員', true, -2),
         nw('N2', '第 11 屆理監事選舉公告', '會務公告', '登記期間至 11 月 15 日止，請向秘書處索取登記表。', '會員', false, -5),
@@ -118,8 +131,15 @@ window.Mock = (function () {
       var mem = db.members.filter(function (x) { return x.name === n; })[0];
       addReg('E1', mem, i % 3 === 0 ? 2 : 1, i === 1 ? '吃素' : '');
       if (i < 6) addReg('E2', mem, i % 2 === 0 ? 3 : 1, '');
-      if (i < 5) addReg('E6', mem, 1, '');
+      if (i < 5) addReg('E6', mem, 1, '', at(-16, 18, 40 + i));
+      if (i < 4) addReg('E9', mem, 1, '', i < 2 ? at(0, new Date().getHours(), 5 + i) : '');
     });
+    // 理監事會：兩位請假
+    addReg('E3', db.members[0], 1, '');
+    addReg('E3', db.members[1], 1, '');
+    db.regs.push({ id: 'R-leave1', eventId: 'E3', memberId: 'M003', name: '李承翰', phone: '0912000003', lineUid: 'U-demo-03', count: 1, note: '出差台北', status: '請假', attended: '', checkinBy: '', createdAt: at(-1, 9) });
+    // 林志豪上個月例會請假
+    db.regs.push({ id: 'R-leave2', eventId: 'E6', memberId: 'M005', name: '林志豪', phone: '0912000005', lineUid: 'U-demo-05', count: 1, note: '家裡有事', status: '請假', attended: '', checkinBy: '', createdAt: at(-17, 9) });
     for (var g = 0; g < 9; g++) {
       db.regs.push({ id: 'R-g' + g, eventId: 'E2', memberId: '', name: '來賓' + (g + 1), phone: '09330000' + (10 + g), lineUid: 'U-guest-' + g, count: 2, note: '', status: '報名', createdAt: at(-3, 10 + g) });
     }
@@ -127,15 +147,16 @@ window.Mock = (function () {
     Object.keys(IDENTITY).forEach(function (k) { friend[k] = k !== '訪客'; });
   }
 
-  function ev(id, title, cat, start, end, loc, aud, dl, cap, fee, desc, status) {
+  function ev(id, title, cat, start, end, loc, aud, dl, cap, fee, desc, status, albumUrl) {
     return { id: id, title: title, category: cat, start: start, end: end, location: loc, mapUrl: loc === '待定' ? '' : 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent('台中市龍井區 ' + loc),
-      description: desc, imageUrl: '', audience: aud, deadline: dl, capacity: cap, fee: fee, status: status || '發布', createdBy: '陳怡君' };
+      description: desc, imageUrl: '', albumUrl: albumUrl || '', audience: aud, deadline: dl, capacity: cap, fee: fee, status: status || '發布', checkinCode: '', createdBy: '陳怡君' };
   }
   function nw(id, title, cat, content, aud, pinned, days) {
     return { id: id, title: title, category: cat, content: content, imageUrl: '', audience: aud, pinned: pinned, status: '發布', publishedAt: at(days, 9, 30), createdBy: '陳怡君' };
   }
-  function addReg(eventId, mem, count, note) {
-    db.regs.push({ id: 'R' + uid4(), eventId: eventId, memberId: mem.id, name: mem.name, phone: mem.phone, lineUid: mem.lineUid || 'U-x-' + mem.id, count: count, note: note, status: '報名', createdAt: at(-4, 12) });
+  function addReg(eventId, mem, count, note, attended) {
+    db.regs.push({ id: 'R' + uid4(), eventId: eventId, memberId: mem.id, name: mem.name, phone: mem.phone, lineUid: mem.lineUid || 'U-x-' + mem.id, count: count, note: note, status: '報名',
+      attended: attended || '', checkinBy: attended ? '掃碼報到' : '', createdAt: at(-4, 12) });
   }
 
   /* ───────── 情境（等同後端 contextForUid_） ───────── */
@@ -154,7 +175,9 @@ window.Mock = (function () {
     return {
       uid: c.uid, lineName: c.lineName, picture: '', bound: !!c.member, disabled: c.disabled,
       role: c.roleName, level: c.level, perms: clone(c.perms),
-      member: c.member ? { id: c.member.id, name: c.member.name, phone: c.member.phone, title: c.member.title, company: c.member.company, email: c.member.email, joinYear: c.member.joinYear } : null,
+      member: c.member ? { id: c.member.id, name: c.member.name, phone: c.member.phone, title: c.member.title, company: c.member.company, industry: c.member.industry,
+        email: c.member.email, birthday: c.member.birthday, joinYear: c.member.joinYear } : null,
+      attendance: c.member ? memberAttendance(c.member.id, attendanceIndex(new Date().getFullYear())) : null,
       pendingRequest: !c.member && pend ? { id: pend.id, name: pend.name, createdAt: pend.createdAt } : null
     };
   }
@@ -163,11 +186,57 @@ window.Mock = (function () {
   function activeRegs(eventId) {
     return db.regs.filter(function (r) { return r.eventId === eventId && r.status !== '取消'; });
   }
+  function attending(r) { return r.status !== '請假'; }
+  function eventEnd(e) { return e.end ? Date.parse(e.end) : Date.parse(e.start) + 3 * 3600000; }
+  function checkinWindow(e) {
+    if (e.status !== '發布') return { open: false, from: '', to: '' };
+    var from = Date.parse(e.start) - 120 * 60000, to = eventEnd(e) + 180 * 60000, now = Date.now();
+    return { open: now >= from && now <= to, from: new Date(from).toISOString(), to: new Date(to).toISOString() };
+  }
+  function leaveClosedReason(e, c) {
+    if (e.status === '取消') return '活動已取消';
+    if (e.status !== '發布') return '活動尚未發布';
+    if (eventEnd(e) < Date.now()) return '活動已結束';
+    if (c.disabled) return '帳號已停用，請洽秘書處';
+    if (!c.member) return '請先綁定會員身分';
+    return '';
+  }
+  function membersAtLevel(min) {
+    return db.members.filter(function (m) { var r = BY[m.role]; return m.status !== '停用' && r && r.level > 0 && r.level >= min; });
+  }
+  function attendanceIndex(year) {
+    var now = Date.now(), meetings = {}, others = {};
+    db.events.forEach(function (e) {
+      var s = new Date(e.start);
+      if (e.status !== '發布' || s.getFullYear() !== year || s.getTime() > now) return;
+      (e.category === '例會' ? meetings : others)[e.id] = true;
+    });
+    var byMember = {};
+    db.regs.forEach(function (r) {
+      if (!r.attended || !attending(r) || !r.memberId) return;
+      var bucket = meetings[r.eventId] ? 'meeting' : others[r.eventId] ? 'other' : null;
+      if (!bucket) return;
+      (byMember[r.memberId] = byMember[r.memberId] || { meeting: {}, other: {} })[bucket][r.eventId] = true;
+    });
+    return { year: year, meetingTotal: Object.keys(meetings).length, otherTotal: Object.keys(others).length, byMember: byMember };
+  }
+  function memberAttendance(id, idx) {
+    var b = idx.byMember[id] || { meeting: {}, other: {} };
+    return { year: idx.year, meetingAttended: Object.keys(b.meeting).length, meetingTotal: idx.meetingTotal, otherAttended: Object.keys(b.other).length, otherTotal: idx.otherTotal };
+  }
+  function icsText(e) {
+    var esc = function (s) { return String(s || '').replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n'); };
+    var z = function (iso) { return new Date(iso).toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, ''); };
+    return ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//demo//會員專區//ZH', 'BEGIN:VEVENT', 'UID:' + e.id + '@demo', 'DTSTAMP:' + z(new Date().toISOString()),
+      'DTSTART:' + z(e.start), 'DTEND:' + z(e.end || new Date(Date.parse(e.start) + 7200000).toISOString()), 'SUMMARY:' + esc(e.title),
+      'LOCATION:' + esc(e.location), 'DESCRIPTION:' + esc(e.description), 'END:VEVENT', 'END:VCALENDAR'].join('\r\n') + '\r\n';
+  }
   function evVisible(e, c) {
     if (e.status === '草稿' && !c.perms.eventManage) return false;
     return audLevel(e.audience) <= c.level;
   }
-  function closedReason(e, c, others, mine) {
+  function closedReason(e, c, others, mineAttending) {
+    var mine = mineAttending;
     if (e.status === '取消') return '活動已取消';
     if (e.status !== '發布') return '活動尚未發布';
     var now = Date.now();
@@ -179,20 +248,45 @@ window.Mock = (function () {
     return '';
   }
   function evOut(e, c, withRegs) {
-    var regs = activeRegs(e.id), mine = null, total = 0, others = 0;
-    regs.forEach(function (r) { total += r.count; if (r.lineUid === c.uid) mine = r; else others += r.count; });
-    var reason = closedReason(e, c, others, mine);
+    var regs = activeRegs(e.id), attend = [], leave = [], mine = null, total = 0, others = 0, attended = 0;
+    regs.forEach(function (r) {
+      if (r.lineUid === c.uid) mine = r;
+      if (!attending(r)) { leave.push(r); return; }
+      attend.push(r);
+      total += r.count;
+      if (r !== mine) others += r.count;
+      if (r.attended) attended++;
+    });
+    var reason = closedReason(e, c, others, !!(mine && attending(mine)));
+    var win = checkinWindow(e);
     var o = clone(e);
+    delete o.checkinCode;
     o.audienceLevel = audLevel(e.audience);
     o.regCount = total;
-    o.regPeople = regs.length;
-    o.myReg = mine ? { id: mine.id, count: mine.count, note: mine.note } : null;
+    o.regPeople = attend.length;
+    o.leaveCount = leave.length;
+    o.attendedCount = attended;
+    o.myReg = mine ? { id: mine.id, status: mine.status, count: mine.count, note: mine.note, attended: mine.attended || '', checkinBy: mine.checkinBy || '' } : null;
     o.regOpen = !reason;
     o.regClosedReason = reason;
+    o.leaveOpen = !leaveClosedReason(e, c);
+    o.checkinOpen = win.open;
+    o.checkinFrom = win.from;
+    o.checkinTo = win.to;
+    o.icsUrl = e.status === '發布' ? 'data:text/calendar;charset=utf-8,' + encodeURIComponent(icsText(e)) : '';
     if (withRegs && c.perms.viewRegs) {
-      o.registrations = regs.map(function (r) {
-        return { name: r.name, phone: r.phone, count: r.count, note: r.note, memberId: r.memberId, guest: !r.memberId, createdAt: r.createdAt };
+      o.registrations = attend.map(function (r) {
+        return { regId: r.id, name: r.name, phone: r.phone, count: r.count, note: r.note, memberId: r.memberId, guest: !r.memberId, attended: r.attended || '', checkinBy: r.checkinBy || '', createdAt: r.createdAt };
       });
+      o.leaves = leave.map(function (r) { return { regId: r.id, name: r.name, memberId: r.memberId, note: r.note, createdAt: r.createdAt }; });
+      o.unreplied = null;
+      if (o.audienceLevel > 0) {
+        var replied = {};
+        regs.forEach(function (r) { if (r.memberId) replied[r.memberId] = true; if (r.lineUid) replied['u:' + r.lineUid] = true; });
+        o.unreplied = membersAtLevel(o.audienceLevel).filter(function (m) { return !replied[m.id] && !(m.lineUid && replied['u:' + m.lineUid]); })
+          .map(function (m) { return { id: m.id, name: m.name, role: m.role, bound: !!m.lineUid }; });
+      }
+      if (e.checkinCode) o.checkin = { code: e.checkinCode, url: location.origin + location.pathname + '#/checkin/' + e.id + '/' + e.checkinCode };
     }
     return o;
   }
@@ -216,6 +310,18 @@ window.Mock = (function () {
     o.audienceLevel = audLevel(n.audience);
     return o;
   }
+  function docOut(x) { var o = clone(x); o.audienceLevel = audLevel(x.audience); return o; }
+  function visibleDocs(c) {
+    return db.docs.filter(function (x) { return (x.status === '發布' || c.perms.newsManage) && audLevel(x.audience) <= c.level; })
+      .map(docOut).sort(function (a, b) { return DOC_CATS.indexOf(a.category) - DOC_CATS.indexOf(b.category); });
+  }
+  function monthBirthdays() {
+    var now = new Date(), m = now.getMonth() + 1, d = now.getDate();
+    return db.members.filter(function (x) { var r = BY[x.role]; return x.status !== '停用' && r && r.level > 0 && x.birthday; }).map(function (x) {
+      var p = x.birthday.split('-');
+      return Number(p[1]) === m ? { id: x.id, name: x.name, role: x.role, month: m, day: Number(p[2]), today: Number(p[2]) === d } : null;
+    }).filter(Boolean).sort(function (a, b) { return a.day - b.day; });
+  }
   function visibleNews(c) {
     return db.news.filter(function (n) { return newsVisible(n, c); }).map(newsOut).sort(function (a, b) {
       if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
@@ -230,11 +336,20 @@ window.Mock = (function () {
     if (mode === 'friends') return { broadcast: true, uids: null, label: '所有加入官方帳號的好友', estimate: 86 };
     var set = {}, uids = [];
     function add(u) { if (u && !set[u]) { set[u] = 1; uids.push(u); } }
-    if (mode === 'event') {
+    if (mode === 'event' || mode === 'eventUnreplied') {
       var e = db.events.filter(function (x) { return x.id === aud.eventId; })[0];
       if (!e) throw err('NOT_FOUND', '找不到這個活動');
-      activeRegs(e.id).forEach(function (r) { add(r.lineUid); });
-      return { uids: uids, label: '「' + e.title + '」報名者' };
+      var regs = activeRegs(e.id);
+      if (mode === 'event') {
+        regs.forEach(function (r) { if (attending(r)) add(r.lineUid); });
+        return { uids: uids, label: '「' + e.title + '」報名者' };
+      }
+      var lvl = audLevel(e.audience);
+      if (lvl <= 0) throw err('INVALID', '公開活動沒有「未回覆者」名單，請改選其他對象');
+      var replied = {};
+      regs.forEach(function (r) { if (r.memberId) replied[r.memberId] = true; if (r.lineUid) replied['u:' + r.lineUid] = true; });
+      membersAtLevel(lvl).forEach(function (m) { if (!replied[m.id] && !replied['u:' + m.lineUid]) add(m.lineUid); });
+      return { uids: uids, label: '「' + e.title + '」未回覆者' };
     }
     var mem = db.members.filter(function (m) { return m.status !== '停用' && m.lineUid; });
     var label;
@@ -291,7 +406,10 @@ window.Mock = (function () {
         me: meOut(c),
         roles: ROLES.map(function (r) { return { role: r.role, level: r.level, desc: r.desc }; }),
         events: visibleEvents(c), news: visibleNews(c),
-        categories: { event: EVENT_CATS, news: NEWS_CATS },
+        docs: visibleDocs(c),
+        birthdays: c.perms.directory ? monthBirthdays() : [],
+        categories: { event: EVENT_CATS, news: NEWS_CATS, doc: DOC_CATS },
+        industries: INDUSTRIES,
         serverTime: new Date().toISOString(),
         pushReady: true
       };
@@ -318,11 +436,28 @@ window.Mock = (function () {
       return { status: 'pending', me: meOut(ctx()) };
     },
     event: function (c, d) { return evOut(findEvent(d.id, c), c, true); },
+    updateMe: function (c, d) {
+      if (!c.member) throw err('FORBIDDEN', '請先完成會員綁定');
+      var email = String(d.email || '').trim();
+      if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw err('INVALID', 'Email 格式不正確');
+      var b = String(d.birthday || '').trim();
+      if (b && (!/^\d{4}-\d{2}-\d{2}$/.test(b) || Date.parse(b) > Date.now())) throw err('INVALID', '生日日期不正確');
+      Object.assign(c.member, { company: String(d.company || '').trim().slice(0, 60), industry: String(d.industry || '').trim().slice(0, 30), email: email, birthday: b });
+      return meOut(ctx());
+    },
     register: function (c, d) {
       var e = findEvent(d.eventId, c);
       var regs = activeRegs(e.id), mine = null, others = 0;
-      regs.forEach(function (r) { if (r.lineUid === c.uid) mine = r; else others += r.count; });
-      var reason = closedReason(e, c, others, mine);
+      regs.forEach(function (r) { if (r.lineUid === c.uid) mine = r; else if (attending(r)) others += r.count; });
+      var now = new Date().toISOString(), note = String(d.note || '').slice(0, 200);
+      if (d.reply === '請假') {
+        var why = leaveClosedReason(e, c);
+        if (why) throw err('REG_CLOSED', why);
+        if (mine) Object.assign(mine, { status: '請假', note: note, attended: '', checkinBy: '' });
+        else db.regs.push({ id: 'R' + uid4(), eventId: e.id, memberId: c.member.id, name: c.member.name, phone: c.member.phone, lineUid: c.uid, count: 1, note: note, status: '請假', attended: '', checkinBy: '', createdAt: now });
+        return evOut(e, c, true);
+      }
+      var reason = closedReason(e, c, others, !!(mine && attending(mine)));
       if (reason) throw err('REG_CLOSED', reason);
       var count = Math.floor(Number(d.count) || 1);
       if (count < 1 || count > 10) throw err('INVALID', '報名人數請填 1 到 10 人');
@@ -334,22 +469,99 @@ window.Mock = (function () {
         if (!normName(name)) throw err('INVALID', '請填寫姓名');
         if (!/^09\d{8}$/.test(phone)) throw err('INVALID', '請填寫正確的手機號碼（09 開頭共 10 碼）');
       }
-      if (mine) { mine.count = count; mine.note = d.note || ''; }
-      else db.regs.push({ id: 'R' + uid4(), eventId: e.id, memberId: memberId, name: name, phone: phone, lineUid: c.uid, count: count, note: d.note || '', status: '報名', createdAt: new Date().toISOString() });
+      if (mine) Object.assign(mine, { status: '報名', count: count, note: note });
+      else db.regs.push({ id: 'R' + uid4(), eventId: e.id, memberId: memberId, name: name, phone: phone, lineUid: c.uid, count: count, note: note, status: '報名', attended: '', checkinBy: '', createdAt: now });
       return evOut(e, c, true);
     },
     cancelRegistration: function (c, d) {
       var e = findEvent(d.eventId, c);
-      if (Date.parse(e.start) <= Date.now()) throw err('REG_CLOSED', '活動已開始，無法取消報名');
+      if (Date.parse(e.start) <= Date.now()) throw err('REG_CLOSED', '活動已開始，無法取消');
       var mine = activeRegs(e.id).filter(function (r) { return r.lineUid === c.uid; })[0];
-      if (!mine) throw err('NOT_FOUND', '你沒有報名這個活動');
+      if (!mine) throw err('NOT_FOUND', '你沒有回覆這個活動');
       mine.status = '取消';
       return evOut(e, c, true);
+    },
+    checkin: function (c, d) {
+      var e = findEvent(d.eventId, c);
+      var code = String(d.code || '').toUpperCase();
+      if (!code || code !== String(e.checkinCode || '').toUpperCase()) throw err('INVALID', '報到碼不正確，請掃描現場的 QR code');
+      if (!checkinWindow(e).open) throw err('CHECKIN_CLOSED', '目前不在報到時間（活動開始前 2 小時到結束後 3 小時）');
+      var mine = activeRegs(e.id).filter(function (r) { return r.lineUid === c.uid; })[0];
+      var now = new Date().toISOString(), already = false;
+      if (mine) {
+        if (mine.attended) already = true;
+        else { mine.attended = now; mine.checkinBy = '掃碼報到'; if (!attending(mine)) { mine.status = '報名'; mine.count = 1; } }
+      } else {
+        if (!c.member) throw err('NOT_REGISTERED', '你沒有報名這場活動，請先到活動頁報名，或請工作人員協助');
+        db.regs.push({ id: 'R' + uid4(), eventId: e.id, memberId: c.member.id, name: c.member.name, phone: c.member.phone, lineUid: c.uid, count: 1, note: '', status: '報名', attended: now, checkinBy: '掃碼報到', createdAt: now });
+      }
+      return { already: already, event: evOut(e, c, true) };
+    },
+    checkinQr: function (c, d) {
+      var e = findEvent(d.eventId, c);
+      if (!e.checkinCode || d.renew) {
+        var chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789', code = '';
+        for (var i = 0; i < 6; i++) code += chars.charAt(Math.floor(Math.random() * chars.length));
+        e.checkinCode = code;
+      }
+      var win = checkinWindow(e);
+      return { code: e.checkinCode, url: location.origin + location.pathname + '#/checkin/' + e.id + '/' + e.checkinCode, open: win.open, from: win.from, to: win.to };
+    },
+    setAttendance: function (c, d) {
+      var e = findEvent(d.eventId, c), regs = activeRegs(e.id), row = null, now = new Date().toISOString();
+      if (d.regId) {
+        row = regs.filter(function (r) { return r.id === d.regId; })[0];
+        if (!row) throw err('NOT_FOUND', '找不到這筆報名');
+      } else if (d.memberId) {
+        var m = db.members.filter(function (x) { return x.id === d.memberId; })[0];
+        if (!m) throw err('NOT_FOUND', '找不到這位會員');
+        row = regs.filter(function (r) { return r.memberId === m.id || (m.lineUid && r.lineUid === m.lineUid); })[0];
+        if (!row) {
+          db.regs.push({ id: 'R' + uid4(), eventId: e.id, memberId: m.id, name: m.name, phone: m.phone, lineUid: m.lineUid, count: 1, note: '', status: '報名', attended: now, checkinBy: '現場加入', createdAt: now });
+          return evOut(e, c, true);
+        }
+        d.attended = true;
+      } else throw err('INVALID', '缺少報名編號或會員編號');
+      if (d.attended) { row.attended = now; row.checkinBy = '幹部點名'; if (!attending(row)) { row.status = '報名'; row.count = 1; } }
+      else { row.attended = ''; row.checkinBy = ''; }
+      return evOut(e, c, true);
+    },
+    attendanceStats: function (c, d) {
+      var year = Math.floor(Number(d.year)) || new Date().getFullYear();
+      var idx = attendanceIndex(year);
+      var members = membersAtLevel(1).map(function (m) {
+        var a = memberAttendance(m.id, idx);
+        return { id: m.id, name: m.name, role: m.role, level: BY[m.role].level, meetingAttended: a.meetingAttended, otherAttended: a.otherAttended };
+      }).sort(function (a, b) { return (b.level - a.level) || (b.meetingAttended - a.meetingAttended) || (b.otherAttended - a.otherAttended); });
+      return { year: year, meetingTotal: idx.meetingTotal, otherTotal: idx.otherTotal, members: members };
+    },
+    saveDoc: function (c, d) {
+      var x = d.doc || {};
+      if (!String(x.title || '').trim()) throw err('INVALID', '請填寫文件標題');
+      if (!/^https:\/\//.test(x.url || '')) throw err('INVALID', '請填寫 https:// 開頭的連結（例如 Google 雲端硬碟的分享連結）');
+      var aud = BY[x.audience] ? x.audience : '會員';
+      if (audLevel(aud) > c.level) aud = c.roleName;
+      var rec = { title: x.title.trim(), category: DOC_CATS.indexOf(x.category) >= 0 ? x.category : '其他', url: x.url, description: x.description || '', audience: aud,
+        status: x.status === '草稿' ? '草稿' : '發布', updatedAt: new Date().toISOString() };
+      var row;
+      if (x.id) {
+        row = db.docs.filter(function (y) { return y.id === x.id; })[0];
+        if (!row) throw err('NOT_FOUND', '找不到這份文件');
+        Object.assign(row, rec);
+      } else {
+        row = Object.assign({ id: 'D' + uid4(), createdBy: c.member.name }, rec);
+        db.docs.push(row);
+      }
+      return { doc: docOut(row), docs: visibleDocs(c) };
+    },
+    deleteDoc: function (c, d) {
+      db.docs = db.docs.filter(function (x) { return x.id !== d.id; });
+      return { id: d.id, deleted: true, docs: visibleDocs(c) };
     },
     directory: function () {
       return db.members.filter(function (m) { return m.status !== '停用'; }).map(function (m) {
         var r = BY[m.role];
-        return { id: m.id, name: m.name, role: m.role, level: r ? r.level : 0, title: m.title, company: m.company, phone: m.phone, email: m.email, joinYear: m.joinYear };
+        return { id: m.id, name: m.name, role: m.role, level: r ? r.level : 0, title: m.title, company: m.company, industry: m.industry || '', phone: m.phone, email: m.email, joinYear: m.joinYear };
       }).sort(function (a, b) { return (b.level - a.level) || a.id.localeCompare(b.id); });
     },
     saveEvent: function (c, d) {
@@ -363,7 +575,7 @@ window.Mock = (function () {
       var rec = {
         title: e.title.trim(), category: EVENT_CATS.indexOf(e.category) >= 0 ? e.category : '其他', start: e.start, end: e.end || '',
         location: e.location || '', mapUrl: /^https:\/\//.test(e.mapUrl || '') ? e.mapUrl : '', description: e.description || '',
-        imageUrl: /^https:\/\//.test(e.imageUrl || '') ? e.imageUrl : '', audience: aud, deadline: e.deadline || '',
+        imageUrl: /^https:\/\//.test(e.imageUrl || '') ? e.imageUrl : '', albumUrl: /^https:\/\//.test(e.albumUrl || '') ? e.albumUrl : '', audience: aud, deadline: e.deadline || '',
         capacity: Math.max(0, Math.floor(Number(e.capacity) || 0)), fee: e.fee || '', status: e.status === '草稿' ? '草稿' : '發布'
       };
       var row;
@@ -485,6 +697,7 @@ window.Mock = (function () {
     }
   };
   var PERM = { directory: 'directory', saveEvent: 'eventManage', cancelEvent: 'eventManage', saveNews: 'newsManage', deleteNews: 'newsManage',
+    saveDoc: 'newsManage', deleteDoc: 'newsManage', checkinQr: 'viewRegs', setAttendance: 'viewRegs', attendanceStats: 'viewRegs',
     pushPreview: 'push', push: 'push', pushLog: 'push', members: 'memberManage', updateMember: 'memberManage', unbindMember: 'memberManage',
     requests: 'memberManage', handleRequest: 'memberManage' };
 

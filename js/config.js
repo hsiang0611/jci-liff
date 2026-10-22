@@ -6,13 +6,13 @@
  */
 window.APP_CONFIG = {
   // LINE Developers → LINE Login channel → LIFF 分頁的 LIFF ID，例如 '2001234567-AbCdEfGh'
-  LIFF_ID: '2012134116-hfQ9YMRC',
+  LIFF_ID: '',
 
   // Apps Script 部署後的網頁應用程式網址，結尾是 /exec
-  API_URL: 'https://script.google.com/macros/s/AKfycbwJaJCbMiSCPv3l3LWd4nu1r0BnySWO1AldvyORgtetXvJxuLhgm7qs2Gq1bsEZJhcf/exec',
+  API_URL: '',
 
   // 官方帳號的 Basic ID（含 @），用於「加入好友」按鈕，例如 '@123abcde'
-  OA_BASIC_ID: '@183svval',
+  OA_BASIC_ID: '',
 
   ORG_NAME: '龍井國際青年商會',
   ORG_SHORT: '龍井青商',

@@ -308,6 +308,7 @@ h1, h2, h3, p { margin: 0; }
   max-width: 560px; margin: 0 auto;
 }
 .actionbar .btn-primary { flex: 1; }
+.actionbar .iconbtn { border: 1px solid var(--line); background: var(--surface); width: 48px; height: 48px; border-radius: var(--r); color: var(--harbor); }
 
 /* ── 按鈕 ── */
 .btn {
@@ -538,6 +539,82 @@ input[type=radio], input[type=checkbox] { width: 20px; height: 20px; accent-colo
 .sheet-title small { font-size: 14px; font-weight: 400; color: var(--muted); margin-top: 2px; }
 .sheet-text { font-size: 15px; color: var(--ink-2); margin-bottom: 16px; }
 .sheet-sub { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--line); display: grid; gap: 10px; font-size: 14.5px; }
+
+/* ── 出席／請假回覆 ── */
+.replies { display: block; font-size: 13.5px; color: var(--ink-2); margin: 2px 0 6px; }
+.replies b { font-family: var(--num); font-size: 17px; color: var(--ink); margin-right: 1px; }
+.myreg.is-leave { background: var(--buoy-soft); color: var(--buoy); }
+.seg-reply { margin-bottom: 4px; }
+.seg-reply label { position: relative; display: block; }
+.seg-reply input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.seg-reply span { display: flex; align-items: center; justify-content: center; gap: 6px; padding: 9px 0; border-radius: 8px; font-size: 15px; font-weight: 600; color: var(--ink-2); }
+.seg-reply span .ic { width: 18px; height: 18px; }
+.seg-reply input:checked + span { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgba(19, 36, 58, .12); }
+.seg-reply input:focus-visible + span { outline: 2.5px solid var(--harbor); outline-offset: -2px; }
+.sub-head { font-size: 14px; font-weight: 700; color: var(--ink-2); margin: 18px 0 8px; letter-spacing: .04em; }
+.regs.is-marking li { padding-left: 10px; }
+.regs .att { width: 24px; height: 24px; margin: 0 4px 0 0; flex: none; accent-color: var(--ok); }
+.regs li.is-attended b { color: var(--ok); }
+.regs-n.is-ok { color: var(--ok); }
+.regs.is-leave li > div::before { content: none; }
+.regs.is-leave b { color: var(--buoy); }
+.reglist > .btn-small { margin-top: 10px; }
+.names { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 15px; margin: 0 0 6px; }
+.names .is-unbound { color: var(--muted); }
+
+/* ── 報到 QR ── */
+.qr-box { background: #fff; border-radius: var(--r); padding: 14px; margin: 0 auto 10px; width: min(100%, 300px); aspect-ratio: 1; display: grid; place-items: center; border: 1px solid var(--line); }
+.qr-box svg { width: 100%; height: 100%; display: block; }
+.qr-code { text-align: center; font-size: 15px; color: var(--ink-2); margin-bottom: 4px; }
+.qr-code b { font-family: var(--num); font-size: 26px; letter-spacing: .18em; color: var(--ink); margin-left: 6px; }
+.view-checkin { padding-top: 16px; }
+.checkin-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 22px 18px 20px; display: flex; flex-direction: column; gap: 12px; }
+.checkin-card h1 { font-size: 22px; line-height: 1.35; }
+.checkin-card .banner { margin-top: 0; }
+.btn-big { height: 60px; font-size: 19px; }
+.btn-big .ic { width: 24px; height: 24px; }
+.checkin-ok { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 26px 0 18px; text-align: center; color: var(--ok); }
+.checkin-ok .ic { width: 72px; height: 72px; stroke-width: 1.5; animation: pop .45s cubic-bezier(.2, .8, .2, 1.2) both; }
+.checkin-ok b { font-size: 22px; }
+.checkin-ok span { font-size: 14px; color: var(--ink-2); }
+@keyframes pop { from { transform: scale(.6); opacity: 0; } to { transform: none; opacity: 1; } }
+
+/* ── 我的資料、出席 ── */
+.profile-card .block-head { margin-bottom: 6px; }
+.kv { margin: 0; display: grid; gap: 6px; font-size: 15px; }
+.kv div { display: flex; gap: 12px; }
+.kv dt { width: 6em; flex: none; color: var(--muted); }
+.kv dd { margin: 0; word-break: break-all; }
+.att-me { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); display: grid; gap: 6px; }
+.att-row { display: flex; justify-content: space-between; font-size: 14.5px; }
+.att-row b { font-family: var(--num); font-size: 18px; }
+.att-table { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; margin-bottom: 14px; }
+.att-head, .att-line { display: grid; grid-template-columns: 1fr 96px 64px; gap: 10px; align-items: center; padding: 10px 14px; }
+.att-head { font-size: 12.5px; color: var(--muted); background: var(--paper); font-weight: 600; }
+.att-line + .att-line { border-top: 1px solid var(--line); }
+.att-name { display: flex; flex-direction: column; min-width: 0; }
+.att-name b { font-size: 15.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.att-name span { font-size: 12.5px; color: var(--muted); }
+.att-cell b { font-family: var(--num); font-size: 19px; }
+.att-cell small { color: var(--muted); font-family: var(--num); font-size: 14px; }
+.att-cell .capbar { margin-top: 4px; }
+
+/* ── 壽星、文件 ── */
+.bdays { list-style: none; margin: 0; padding: 4px 14px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); }
+.bdays li { display: flex; align-items: center; gap: 12px; padding: 9px 0; font-size: 15.5px; }
+.bdays li + li { border-top: 1px solid var(--line); }
+.bday-d { font-family: var(--num); font-size: 17px; color: var(--harbor-deep); width: 3.2em; letter-spacing: .03em; }
+.bdays .pill { margin-left: auto; display: inline-flex; align-items: center; gap: 3px; }
+.bdays .pill .ic { width: 14px; height: 14px; }
+.bdays li.is-today b { color: var(--buoy); }
+.doc-row { display: flex; align-items: center; }
+.doc-main { flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; padding: 12px 6px 12px 14px; color: inherit; }
+.doc-main > .ic:first-child { color: var(--harbor); }
+.doc-main > div { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.doc-main b { font-size: 15.5px; font-weight: 600; }
+.doc-main span { font-size: 13px; color: var(--muted); }
+.doc-main .chev { color: #B4BCC7; width: 18px; height: 18px; }
+.doc-row .iconbtn { color: var(--muted); }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }

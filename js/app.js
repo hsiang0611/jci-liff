@@ -18,8 +18,9 @@
   var S = {
     ready: false, demo: false,
     me: null, roles: [], events: [], news: [], categories: { event: [], news: [] },
-    pendingCount: 0, friend: null,
+    pendingCount: 0, friend: null, docs: [], birthdays: [], industries: [],
     cache: {},
+    dirIndustry: '', attYear: 0, checkinDone: {},
     evFilter: 'upcoming', newsCat: '', dirQuery: '', memQuery: '', memFilter: '',
     bindResult: null,
     push: null
@@ -104,6 +105,17 @@
     return '<span class="cat" style="--c:' + (CAT_COLOR[cat] || '#8A94A3') + '">' + esc(cat || '其他') + '</span>';
   }
 
+  /** 姓名依筆畫排序（繁體中文排序規則：先比姓氏筆畫，同姓再比下一個字） */
+  var nameCollator = window.Intl && Intl.Collator ? new Intl.Collator('zh-Hant-TW') : null;
+  function byName(a, b) {
+    var x = String(a.name || ''), y = String(b.name || '');
+    return nameCollator ? nameCollator.compare(x, y) : x.localeCompare(y);
+  }
+  /** 先依角色等級（高到低），同等級再依姓名筆畫 */
+  function byLevelThenName(a, b) {
+    return ((b.level || 0) - (a.level || 0)) || byName(a, b);
+  }
+
   function roleLevel(name) {
     for (var i = 0; i < S.roles.length; i++) if (S.roles[i].role === name) return S.roles[i].level;
     return 0;
@@ -150,7 +162,17 @@
     trash: 'M4.5 7h15M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13',
     chat: 'M12 4.5c5 0 9 3 9 6.8s-4 6.8-9 6.8c-.8 0-1.6-.1-2.3-.2L5 20l.9-3.4C4.2 15.4 3 13.5 3 11.3 3 7.5 7 4.5 12 4.5z',
     inbox: '<path d="M3.5 13 6.5 5h11l3 8v6.5h-17z"/><path d="M3.5 13h5l1.5 2.5h4l1.5-2.5h5"/>',
-    map: '<path d="M9 4.5 3.5 6.5v13L9 17.5l6 2 5.5-2v-13L15 6.5z"/><path d="M9 4.5v13M15 6.5v13"/>'
+    map: '<path d="M9 4.5 3.5 6.5v13L9 17.5l6 2 5.5-2v-13L15 6.5z"/><path d="M9 4.5v13M15 6.5v13"/>',
+    qr: '<rect x="3.5" y="3.5" width="7" height="7" rx="1"/><rect x="13.5" y="3.5" width="7" height="7" rx="1"/><rect x="3.5" y="13.5" width="7" height="7" rx="1"/><path d="M13.5 13.5h3v3h-3zM18.5 13.5h2M20.5 16.5v4h-4M13.5 19.5v1"/>',
+    doc: '<path d="M6 3.5h8l4.5 4.5v12.5H6z"/><path d="M14 3.5V8h4.5M9 12.5h6M9 16h6"/>',
+    cake: '<path d="M4 20.5h16M5 20.5v-6a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v6"/><path d="M5 16.5c1.5 1.4 2.5 1.4 4 0s2.5-1.4 4 0 2.5 1.4 4 0M12 12.5v-3M12 6.5c-.8-1-1.2-2-.2-3 1.1 1 .7 2 .2 3z"/>',
+    camera: '<path d="M4 8.5h3.5l1.5-2.5h6l1.5 2.5H20v11H4z"/><circle cx="12" cy="14" r="3.5"/>',
+    calplus: '<rect x="3.5" y="5" width="17" height="15.5" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4M12 12.5v5M9.5 15h5"/>',
+    briefcase: '<rect x="3.5" y="7.5" width="17" height="12" rx="2"/><path d="M9 7.5V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2.5M3.5 12.5h17"/>',
+    leave: '<circle cx="12" cy="12" r="9"/><path d="M9 9l6 6M15 9l-6 6"/>',
+    chart: 'M4 20V10M10 20V4M16 20v-7M22 20H2',
+    checkcircle: '<circle cx="12" cy="12" r="9"/><path d="m8 12.5 2.8 2.8L16.5 9.5"/>',
+    scan: '<path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M4 12h16"/>'
   };
   function icon(name, cls) {
     var p = ICONS[name] || '';
@@ -231,6 +253,9 @@
     S.categories = d.categories || S.categories;
     S.pendingCount = d.pendingCount || 0;
     S.pushReady = d.pushReady !== false;
+    S.docs = d.docs || [];
+    S.birthdays = d.birthdays || [];
+    S.industries = d.industries || [];
     S.cache = {};
   }
 
@@ -300,6 +325,8 @@
   function regState(ev) {
     if (ev.status === '取消') return { t: '已取消', c: 'is-danger' };
     if (ev.status === '草稿') return { t: '草稿，只有幹部看得到', c: 'is-muted' };
+    if (ev.myReg && ev.myReg.status === '請假') return { t: '已請假', c: 'is-alert' };
+    if (ev.myReg && ev.myReg.attended) return { t: '已報到', c: 'is-ok' };
     if (ev.myReg) return { t: '已報名 ' + ev.myReg.count + ' 人', c: 'is-ok' };
     if (isPast(ev)) return { t: '已結束', c: 'is-muted' };
     if (!ev.regOpen) return { t: ev.regClosedReason, c: 'is-muted' };
@@ -413,6 +440,17 @@
     var news = S.news.filter(function (n) { return n.status === '發布'; }).slice(0, 3);
     html += '<section class="block"><div class="block-head"><h2>最新消息</h2><a href="#/news" data-tab="news">全部消息</a></div>' +
       (news.length ? '<div class="rows">' + news.map(newsRow).join('') + '</div>' : empty('還沒有消息', '')) + '</section>';
+    if (S.birthdays.length) {
+      var mon = S.birthdays[0].month;
+      html += '<section class="block"><div class="block-head"><h2>' + mon + ' 月壽星</h2></div><ul class="bdays">' + S.birthdays.map(function (b) {
+        return '<li' + (b.today ? ' class="is-today"' : '') + '><span class="bday-d">' + b.month + '/' + b.day + '</span><b>' + esc(b.name) + '</b>' +
+          (b.today ? '<span class="pill is-alert">' + icon('cake') + '今天</span>' : '') + '</li>';
+      }).join('') + '</ul></section>';
+    }
+    if (S.docs.length) {
+      html += '<section class="block"><div class="block-head"><h2>文件</h2><a href="#/docs" data-go="docs">全部文件</a></div><div class="rows">' +
+        S.docs.slice(0, 3).map(docRow).join('') + '</div></section>';
+    }
     return html + '</main>';
   }
 
@@ -463,7 +501,14 @@
     if (ev.deadline) facts.push(['flag', '報名截止 ' + fmtDT(ev.deadline), Date.parse(ev.deadline) < Date.now() ? '已截止' : '']);
     var capText = ev.capacity > 0 ? '已報名 ' + ev.regCount + ' 人，名額 ' + ev.capacity + ' 人' : '已報名 ' + ev.regCount + ' 人';
     var bar = ev.capacity > 0 ? '<span class="capbar"><i style="width:' + Math.min(100, Math.round(ev.regCount / ev.capacity * 100)) + '%"></i></span>' : '';
+    if (perm('viewRegs') && ev.audienceLevel > 0 && ev.unreplied) {
+      bar = '<span class="replies"><b>' + ev.regPeople + '</b> 出席　<b>' + ev.leaveCount + '</b> 請假　<b>' + ev.unreplied.length + '</b> 未回覆</span>' + bar;
+    }
     facts.push(['users', capText, bar, true]);
+    if ((ev.checkinOpen || past) && (perm('viewRegs') || ev.attendedCount)) {
+      facts.push(['checkcircle', '已報到 ' + ev.attendedCount + ' 人', ev.checkinOpen && !past ? '報到進行中' : '']);
+    }
+    if (ev.albumUrl) facts.push(['camera', '活動相簿', '<a href="' + esc(ev.albumUrl) + '" data-ext>' + icon('camera') + '看花絮照片</a>', true]);
     if (perm('eventManage')) facts.push(['eye', '可見對象：' + audienceLabel(ev.audience), '']);
     html += '<ul class="facts">' + facts.map(function (f) {
       return '<li>' + icon(f[0]) + '<div><b>' + esc(f[1]) + '</b>' + (f[2] ? '<span>' + (f[3] ? f[2] : esc(f[2])) + '</span>' : '') + '</div></li>';
@@ -472,29 +517,44 @@
     if (ev.description) html += '<div class="prose">' + richText(ev.description) + '</div>';
 
     if (ev.myReg) {
-      html += '<div class="myreg">' + icon('check') + '<div><b>你已報名 ' + ev.myReg.count + ' 人</b>' +
-        (ev.myReg.note ? '<span>備註：' + esc(ev.myReg.note) + '</span>' : '') + '</div>' +
-        (ev.regOpen ? '<button type="button" class="btn btn-ghost btn-small" data-act="cancelReg" data-id="' + esc(ev.id) + '">取消報名</button>' : '') + '</div>';
+      var mr = ev.myReg;
+      var leaving = mr.status === '請假';
+      var head = leaving ? '你已回覆請假' : mr.attended ? '已報到 ' + fmtDT(mr.attended).replace(/^.*?）/, '') : '你已報名 ' + mr.count + ' 人';
+      var sub = mr.note ? (leaving ? '原因：' : '備註：') + esc(mr.note) : '';
+      var canChange = !isPast(ev) && ev.status === '發布' && !mr.attended && Date.parse(ev.start) > Date.now();
+      html += '<div class="myreg' + (leaving ? ' is-leave' : '') + '">' + icon(leaving ? 'leave' : 'check') + '<div><b>' + head + '</b>' +
+        (sub ? '<span>' + sub + '</span>' : '') + '</div>' +
+        (canChange ? '<button type="button" class="btn btn-ghost btn-small" data-act="cancelReg" data-id="' + esc(ev.id) + '">' + (leaving ? '取消請假' : '取消報名') + '</button>' : '') + '</div>';
     }
 
     if (perm('viewRegs')) html += regList(ev, detail);
 
-    if (perm('eventManage')) {
-      html += '<section class="manage"><h2>管理這場活動</h2><div class="manage-actions">' +
-        '<button type="button" class="btn btn-ghost" data-go="event-edit/' + esc(ev.id) + '">' + icon('edit') + '編輯活動</button>' +
-        (canPush() && ev.regPeople ? '<button type="button" class="btn btn-ghost" data-act="pushFor" data-type="event" data-id="' + esc(ev.id) + '">' + icon('send') + '通知報名者</button>' : '') +
-        (ev.status !== '取消' && !past ? '<button type="button" class="btn btn-ghost is-danger" data-act="cancelEvent" data-id="' + esc(ev.id) + '">' + icon('close') + '取消活動</button>' : '') +
-        '</div></section>';
+    if (perm('viewRegs') || perm('eventManage')) {
+      var acts = [];
+      if (perm('viewRegs') && ev.status === '發布' && !past) {
+        acts.push('<button type="button" class="btn btn-ghost" data-act="checkinQr" data-id="' + esc(ev.id) + '">' + icon('qr') + '報到 QR code</button>');
+      }
+      if (perm('eventManage')) acts.push('<button type="button" class="btn btn-ghost" data-go="event-edit/' + esc(ev.id) + '">' + icon('edit') + '編輯活動</button>');
+      if (canPush() && ev.regPeople) acts.push('<button type="button" class="btn btn-ghost" data-act="pushFor" data-type="event" data-id="' + esc(ev.id) + '">' + icon('send') + '通知報名者</button>');
+      if (canPush() && ev.unreplied && ev.unreplied.some(function (u) { return u.bound; })) {
+        acts.push('<button type="button" class="btn btn-ghost" data-act="pushFor" data-type="unreplied" data-id="' + esc(ev.id) + '">' + icon('send') + '催未回覆者</button>');
+      }
+      if (perm('eventManage') && ev.status !== '取消' && !past) acts.push('<button type="button" class="btn btn-ghost is-danger" data-act="cancelEvent" data-id="' + esc(ev.id) + '">' + icon('close') + '取消活動</button>');
+      html += '<section class="manage"><h2>管理這場活動</h2><div class="manage-actions">' + acts.join('') + '</div></section>';
     }
     html += '</main>';
 
     // 底部動作列
-    var main;
-    if (ev.myReg && ev.regOpen) main = '<button type="button" class="btn btn-primary" data-act="openRegister" data-id="' + esc(ev.id) + '">修改報名</button>';
-    else if (ev.regOpen) main = '<button type="button" class="btn btn-primary" data-act="openRegister" data-id="' + esc(ev.id) + '">報名</button>';
-    else if (ev.myReg) main = '<button type="button" class="btn btn-primary" disabled>已報名</button>';
+    var main, isMeeting = ev.category === '理監事會';
+    var verb = isMeeting ? '回覆出席' : '報名';
+    if (ev.myReg && (ev.regOpen || (ev.leaveOpen && ev.myReg.status === '請假'))) main = '<button type="button" class="btn btn-primary" data-act="openRegister" data-id="' + esc(ev.id) + '">修改回覆</button>';
+    else if (ev.regOpen) main = '<button type="button" class="btn btn-primary" data-act="openRegister" data-id="' + esc(ev.id) + '">' + verb + '</button>';
+    else if (ev.leaveOpen && !ev.myReg && S.me.member) main = '<button type="button" class="btn btn-primary" data-act="openRegister" data-id="' + esc(ev.id) + '" data-leaveonly="1">無法出席，請假</button>';
+    else if (ev.myReg) main = '<button type="button" class="btn btn-primary" disabled>' + (ev.myReg.status === '請假' ? '已請假' : ev.myReg.attended ? '已報到' : '已報名') + '</button>';
     else main = '<button type="button" class="btn btn-primary" disabled>' + esc(past ? '活動已結束' : ev.regClosedReason || '無法報名') + '</button>';
-    html += '<div class="actionbar"><button type="button" class="btn btn-ghost" data-act="share" data-id="' + esc(ev.id) + '">' + icon('share') + '分享</button>' + main + '</div>';
+    html += '<div class="actionbar">' +
+      (ev.icsUrl && !past && ev.status === '發布' ? '<button type="button" class="iconbtn" data-act="calendar" data-id="' + esc(ev.id) + '" aria-label="加入行事曆">' + icon('calplus') + '</button>' : '') +
+      '<button type="button" class="btn btn-ghost" data-act="share" data-id="' + esc(ev.id) + '">' + icon('share') + '分享</button>' + main + '</div>';
     return html;
   }
 
@@ -502,18 +562,37 @@
     var head = '<section class="reglist"><div class="block-head"><h2>報名名單</h2>';
     if (!detail) return head + '</div>' + skeleton(2) + '</section>';
     if (detail.__error) return head + '</div>' + errorBlock(detail.__error) + '</section>';
-    var regs = detail.registrations || [];
+    var regs = detail.registrations || [], leaves = detail.leaves || [], unreplied = detail.unreplied;
+    var marking = ev.status === '發布' && Date.parse(ev.start) - Date.now() < 86400000; // 活動前一天起可以點名
     head += regs.length ? '<button type="button" class="linkbtn" data-act="copyRegs" data-id="' + esc(ev.id) + '">' + icon('copy') + '複製名單</button>' : '';
     head += '</div>';
-    if (!regs.length) return head + '<p class="muted">還沒有人報名。</p></section>';
-    var guests = regs.filter(function (r) { return r.guest; }).length;
-    return head + '<p class="muted">共 ' + regs.length + ' 筆、' + detail.regCount + ' 人' + (guests ? '（含非會員 ' + guests + ' 筆）' : '') + '</p>' +
-      '<ol class="regs">' + regs.map(function (r) {
-        return '<li><div><b>' + esc(r.name) + '</b>' + (r.guest ? '<span class="tag">非會員</span>' : '') +
-          (r.count > 1 ? '<span class="regs-n">' + r.count + ' 人</span>' : '') +
-          (r.note ? '<span class="regs-note">' + esc(r.note) + '</span>' : '') + '</div>' +
-          (r.phone ? '<a class="iconbtn" href="tel:' + esc(r.phone) + '" aria-label="打電話給' + esc(r.name) + '">' + icon('phone') + '</a>' : '') + '</li>';
-      }).join('') + '</ol></section>';
+    var html = head;
+    if (!regs.length) html += '<p class="muted">還沒有人報名。</p>';
+    else {
+      var guests = regs.filter(function (r) { return r.guest; }).length;
+      html += '<p class="muted">共 ' + regs.length + ' 筆、' + detail.regCount + ' 人' + (guests ? '（含非會員 ' + guests + ' 筆）' : '') +
+        (marking ? '，已報到 ' + detail.attendedCount + ' 人。點名字前的方框可標記出席' : '') + '</p>' +
+        '<ol class="regs' + (marking ? ' is-marking' : '') + '">' + regs.map(function (r) {
+          var box = marking ? '<input type="checkbox" class="att" data-act="toggleAttend" data-event="' + esc(ev.id) + '" data-reg="' + esc(r.regId) + '"' + (r.attended ? ' checked' : '') + ' aria-label="' + esc(r.name) + ' 出席">' : '';
+          return '<li' + (r.attended ? ' class="is-attended"' : '') + '>' + box + '<div><b>' + esc(r.name) + '</b>' + (r.guest ? '<span class="tag">非會員</span>' : '') +
+            (r.count > 1 ? '<span class="regs-n">' + r.count + ' 人</span>' : '') +
+            (r.attended ? '<span class="regs-n is-ok">' + esc(r.checkinBy || '已報到') + '</span>' : '') +
+            (r.note ? '<span class="regs-note">' + esc(r.note) + '</span>' : '') + '</div>' +
+            (r.phone ? '<a class="iconbtn" href="tel:' + esc(r.phone) + '" aria-label="打電話給' + esc(r.name) + '">' + icon('phone') + '</a>' : '') + '</li>';
+        }).join('') + '</ol>';
+    }
+    if (marking) html += '<button type="button" class="btn btn-ghost btn-small" data-act="walkin" data-id="' + esc(ev.id) + '">' + icon('plus') + '現場加入沒報名的會員</button>';
+    if (leaves.length) {
+      html += '<h3 class="sub-head">請假 ' + leaves.length + ' 人</h3><ol class="regs is-leave">' + leaves.map(function (r) {
+        return '<li><div><b>' + esc(r.name) + '</b>' + (r.note ? '<span class="regs-note">' + esc(r.note) + '</span>' : '') + '</div></li>';
+      }).join('') + '</ol>';
+    }
+    if (unreplied && unreplied.length) {
+      html += '<h3 class="sub-head">未回覆 ' + unreplied.length + ' 人</h3><p class="names">' + unreplied.map(function (u) {
+        return '<span' + (u.bound ? '' : ' class="is-unbound" title="尚未綁定 LINE"') + '>' + esc(u.name) + '</span>';
+      }).join('') + '</p>' + (unreplied.some(function (u) { return !u.bound; }) ? '<p class="hint">灰色的人還沒綁定 LINE，收不到推播，請另外聯絡。</p>' : '');
+    }
+    return html + '</section>';
   }
 
   /* ═════════════ 畫面：活動編輯 ═════════════ */
@@ -555,6 +634,7 @@
       field('費用', '<input id="f-fee" name="fee" maxlength="40" value="' + esc(ev.fee || '') + '" placeholder="例如：會員免費，眷屬 300 元">', '', 'f-fee') +
       field('活動說明', '<textarea id="f-desc" name="description" rows="6" maxlength="3000">' + esc(ev.description || '') + '</textarea>', '', 'f-desc') +
       field('封面圖片網址', '<input id="f-img" name="imageUrl" type="url" inputmode="url" value="' + esc(ev.imageUrl || '') + '" placeholder="https://…">', '選填。需為 https 開頭的圖片網址，推播訊息也會顯示', 'f-img') +
+      field('活動相簿連結', '<input id="f-album" name="albumUrl" type="url" inputmode="url" value="' + esc(ev.albumUrl || '') + '" placeholder="https://photos.app.goo.gl/…">', '活動結束後補上 Google 相簿的分享連結，活動頁會顯示「看花絮照片」', 'f-album') +
       '<fieldset class="field"><legend>狀態</legend><div class="radios">' +
       '<label><input type="radio" name="status" value="發布"' + (ev.status !== '草稿' ? ' checked' : '') + '>發布</label>' +
       '<label><input type="radio" name="status" value="草稿"' + (ev.status === '草稿' ? ' checked' : '') + '>草稿（只有幹部看得到）</label></div></fieldset>' +
@@ -616,6 +696,80 @@
       '<div class="form-actions"><button type="submit" class="btn btn-primary btn-block">' + (isNew ? '發布' : '儲存變更') + '</button></div></form></main>';
   }
 
+  /* ═════════════ 畫面：文件庫 ═════════════ */
+
+  function docRow(d) {
+    var manage = perm('newsManage') ? '<button type="button" class="iconbtn" data-go="doc-edit/' + esc(d.id) + '" aria-label="編輯 ' + esc(d.title) + '">' + icon('edit') + '</button>' : '';
+    return '<div class="drow doc-row"><a class="doc-main" href="' + esc(d.url) + '" data-ext>' + icon('doc') + '<div><b>' + esc(d.title) +
+      (d.status === '草稿' ? '<span class="tag">草稿</span>' : '') + '</b>' +
+      (d.description ? '<span>' + esc(d.description) + '</span>' : '') + '</div>' + icon('next', 'chev') + '</a>' + manage + '</div>';
+  }
+
+  function viewDocs() {
+    var add = perm('newsManage') ? '<button type="button" class="btn btn-small" data-go="doc-edit/new">' + icon('plus') + '新增文件</button>' : '';
+    var html = topbar({ back: 'me', title: '文件庫', actions: add }) + '<main class="view">';
+    if (!S.docs.length) {
+      html += empty('還沒有文件', perm('newsManage') ? '把章程、會議紀錄、表單的雲端硬碟連結加進來，會員就能在這裡找到。' : '秘書處放上文件後會在這裡出現。');
+      return html + '</main>';
+    }
+    var groups = [], by = {};
+    S.docs.forEach(function (d) {
+      if (!by[d.category]) { by[d.category] = { cat: d.category, items: [] }; groups.push(by[d.category]); }
+      by[d.category].items.push(d);
+    });
+    html += groups.map(function (g) {
+      return '<h3 class="month">' + esc(g.cat) + '<small>' + g.items.length + ' 份</small></h3><div class="rows">' + g.items.map(docRow).join('') + '</div>';
+    }).join('');
+    return html + '</main>';
+  }
+
+  function viewDocEdit(r) {
+    if (!perm('newsManage')) return forbidden();
+    var isNew = r.a === 'new';
+    var d = isNew ? { category: '章程規章', audience: '會員', status: '發布' } : S.docs.filter(function (x) { return x.id === r.a; })[0];
+    if (!d) return topbar({ back: 'docs', title: '編輯文件' }) + '<main class="view">' + empty('找不到這份文件', '') + '</main>';
+    return topbar({ back: 'docs', title: isNew ? '新增文件' : '編輯文件' }) +
+      '<main class="view"><form class="form" data-form="doc" novalidate><input type="hidden" name="id" value="' + esc(d.id || '') + '">' +
+      field('標題', '<input id="d-title" name="title" required maxlength="80" value="' + esc(d.title || '') + '" placeholder="例如：第 11 次理監事會議紀錄">', '', 'd-title') +
+      field('分類', '<select id="d-cat" name="category">' + catOptions(S.categories.doc || [], d.category) + '</select>', '', 'd-cat') +
+      field('連結', '<input id="d-url" name="url" type="url" inputmode="url" required value="' + esc(d.url || '') + '" placeholder="https://drive.google.com/…">',
+        '把檔案放在 Google 雲端硬碟，按「共用 → 知道連結的使用者」後複製連結貼上', 'd-url') +
+      field('說明（選填）', '<input id="d-desc" name="description" maxlength="300" value="' + esc(d.description || '') + '" placeholder="例如：2025 年會員大會修訂版">', '', 'd-desc') +
+      field('誰看得到', '<select id="d-aud" name="audience">' + audienceOptions(d.audience) + '</select>', '會議紀錄建議選「幹部以上」', 'd-aud') +
+      '<fieldset class="field"><legend>狀態</legend><div class="radios">' +
+      '<label><input type="radio" name="status" value="發布"' + (d.status !== '草稿' ? ' checked' : '') + '>發布</label>' +
+      '<label><input type="radio" name="status" value="草稿"' + (d.status === '草稿' ? ' checked' : '') + '>草稿</label></div></fieldset>' +
+      '<div class="form-actions"><button type="submit" class="btn btn-primary btn-block">' + (isNew ? '新增文件' : '儲存變更') + '</button></div>' +
+      (isNew ? '' : '<button type="button" class="btn btn-ghost is-danger btn-block" data-act="deleteDoc" data-id="' + esc(d.id) + '">' + icon('trash') + '刪除這份文件</button>') +
+      '</form></main>';
+  }
+
+  /* ═════════════ 畫面：出席統計 ═════════════ */
+
+  function viewAttendance() {
+    if (!perm('viewRegs')) return forbidden();
+    var year = S.attYear || new Date().getFullYear();
+    var key = 'att:' + year;
+    var d = ensure(key, function () { return Api.call('attendanceStats', { year: year }); });
+    var html = topbar({ back: 'me', title: '出席統計' }) + '<main class="view">';
+    var thisYear = new Date().getFullYear();
+    html += '<div class="seg" role="tablist" aria-label="年度">' + [thisYear, thisYear - 1].map(function (y) {
+      return '<button type="button" role="tab" aria-selected="' + (y === year) + '" data-act="attYear" data-v="' + y + '">' + y + ' 年</button>';
+    }).join('') + '</div>';
+    if (!d) return html + skeleton(6) + '</main>';
+    if (d.__error) return html + errorBlock(d.__error) + '</main>';
+    html += '<p class="summary">' + d.year + ' 年已舉行例會 <b>' + d.meetingTotal + '</b> 場，其他活動 <b>' + d.otherTotal + '</b> 場。出席以掃碼報到或幹部點名為準。</p>';
+    if (!d.meetingTotal && !d.otherTotal) return html + empty('這一年還沒有已舉行的活動', '') + '</main>';
+    html += '<div class="att-table"><div class="att-head"><span>會員</span><span>例會</span><span>其他</span></div>' + d.members.map(function (m) {
+      var pct = d.meetingTotal ? Math.round(m.meetingAttended / d.meetingTotal * 100) : 0;
+      return '<div class="att-line"><div class="att-name"><b>' + esc(m.name) + '</b><span>' + esc(m.role) + '</span></div>' +
+        '<div class="att-cell"><b>' + m.meetingAttended + '</b><small>／' + d.meetingTotal + '</small><span class="capbar' + (d.meetingTotal && pct < 50 ? ' is-alert' : '') + '"><i style="width:' + pct + '%"></i></span></div>' +
+        '<div class="att-cell"><b>' + m.otherAttended + '</b><small>／' + d.otherTotal + '</small></div></div>';
+    }).join('') + '</div>';
+    html += '<button type="button" class="btn btn-ghost btn-block" data-act="copyAtt" data-year="' + year + '">' + icon('copy') + '複製統計表</button>';
+    return html + '</main>';
+  }
+
   /* ═════════════ 畫面：通訊錄 ═════════════ */
 
   function viewDirectory() {
@@ -627,20 +781,40 @@
     if (!list) body = skeleton(5);
     else if (list.__error) body = errorBlock(list.__error);
     else body = '<div id="dir-list">' + directoryList(list) + '</div>';
+    var chips = '';
+    if (list && !list.__error) {
+      var inds = [];
+      list.forEach(function (m) { if (m.industry && inds.indexOf(m.industry) < 0) inds.push(m.industry); });
+      if (inds.length > 1) {
+        chips = '<div class="chips" role="tablist" aria-label="行業"><button type="button" role="tab" aria-selected="' + (!S.dirIndustry) + '" data-act="dirIndustry" data-v="">全部</button>' +
+          inds.map(function (i) { return '<button type="button" role="tab" aria-selected="' + (S.dirIndustry === i) + '" data-act="dirIndustry" data-v="' + esc(i) + '">' + esc(i) + '</button>'; }).join('') + '</div>';
+      }
+    }
     return topbar() + '<main class="view"><h1 class="page-title">會員通訊錄</h1>' +
       '<div class="search">' + icon('search') + '<input type="search" data-filter="dir" placeholder="搜尋姓名、職稱、公司" value="' + esc(S.dirQuery) + '" aria-label="搜尋會員"></div>' +
-      body + '</main>';
+      chips + body + '</main>';
   }
 
   function directoryList(list) {
     var q = S.dirQuery.trim().toLowerCase();
-    if (q) list = list.filter(function (m) { return (m.name + m.title + m.company + m.role).toLowerCase().indexOf(q) >= 0; });
-    if (!list.length) return empty('找不到符合的會員', '換個關鍵字試試。');
-    var groups = [], cur = null;
+    if (S.dirIndustry) list = list.filter(function (m) { return m.industry === S.dirIndustry; });
+    if (q) list = list.filter(function (m) { return (m.name + m.title + m.company + m.role + (m.industry || '')).toLowerCase().indexOf(q) >= 0; });
+    if (!list.length) return empty('找不到符合的會員', '換個關鍵字或行業試試。');
+    // 同一個角色的人放在同一組；組的順序依「權限」表：等級高的在前，同等級照表上的列順序
+    var rank = {};
+    S.roles.slice().sort(function (a, b) { return b.level - a.level; })
+      .forEach(function (r, i) { rank[r.role] = i; });
+    var byRole = {}, groups = [];
     list.forEach(function (m) {
-      if (!cur || cur.role !== m.role) { cur = { role: m.role, items: [] }; groups.push(cur); }
-      cur.items.push(m);
+      if (!byRole[m.role]) { byRole[m.role] = { role: m.role, items: [] }; groups.push(byRole[m.role]); }
+      byRole[m.role].items.push(m);
     });
+    groups.sort(function (a, b) {
+      var ra = rank[a.role], rb = rank[b.role];
+      if (ra === undefined || rb === undefined) return (ra === undefined) - (rb === undefined) || a.role.localeCompare(b.role);
+      return ra - rb;
+    });
+    groups.forEach(function (g) { g.items.sort(byName); });
     return groups.map(function (g) {
       return '<h3 class="month">' + esc(g.role) + '<small>' + g.items.length + ' 位</small></h3><div class="rows">' + g.items.map(function (m) {
         return '<details class="drow"><summary><span class="avatar avatar-txt">' + esc(m.name.charAt(0)) + '</span><div class="drow-main"><b>' + esc(m.name) + '</b>' +
@@ -649,6 +823,7 @@
           '<dl class="drow-more">' + (m.phone ? '<div><dt>手機</dt><dd><a href="tel:' + esc(m.phone) + '">' + esc(m.phone) + '</a></dd></div>' : '') +
           (m.email ? '<div><dt>Email</dt><dd><a href="mailto:' + esc(m.email) + '">' + esc(m.email) + '</a></dd></div>' : '') +
           (m.company ? '<div><dt>公司</dt><dd>' + esc(m.company) + '</dd></div>' : '') +
+          (m.industry ? '<div><dt>行業</dt><dd>' + esc(m.industry) + '</dd></div>' : '') +
           (m.joinYear ? '<div><dt>入會</dt><dd>' + esc(m.joinYear) + ' 年</dd></div>' : '') +
           '<div><dt>會員編號</dt><dd>' + esc(m.id) + '</dd></div></dl></details>';
       }).join('') + '</div>';
@@ -683,6 +858,23 @@
     return html + '</section>';
   }
 
+  function profileSection(me) {
+    var m = me.member, a = me.attendance;
+    var rows = [['公司／職業', m.company], ['行業', m.industry], ['Email', m.email], ['生日', m.birthday ? m.birthday.replace(/-/g, '/') : '']];
+    var filled = rows.filter(function (r) { return r[1]; });
+    var html = '<section class="block card profile-card"><div class="block-head"><h2>我的資料</h2>' +
+      '<button type="button" class="linkbtn" data-act="editMe">' + icon('edit') + '編輯</button></div>';
+    html += filled.length ? '<dl class="kv">' + filled.map(function (r) { return '<div><dt>' + r[0] + '</dt><dd>' + esc(r[1]) + '</dd></div>'; }).join('') + '</dl>'
+      : '<p class="muted">補上公司、行業與生日，會友才找得到你，壽星祝福也才收得到。</p>';
+    if (a && (a.meetingTotal || a.otherTotal)) {
+      var pct = a.meetingTotal ? Math.round(a.meetingAttended / a.meetingTotal * 100) : 0;
+      html += '<div class="att-me"><div class="att-row"><span>' + a.year + ' 年例會出席</span><b>' + a.meetingAttended + '／' + a.meetingTotal + '</b></div>' +
+        (a.meetingTotal ? '<span class="capbar"><i style="width:' + pct + '%"></i></span>' : '') +
+        (a.otherTotal ? '<div class="att-row muted"><span>其他活動出席</span><b>' + a.otherAttended + '／' + a.otherTotal + '</b></div>' : '') + '</div>';
+    }
+    return html + '</section>';
+  }
+
   function viewMe() {
     var me = S.me;
     var html = topbar() + '<main class="view"><h1 class="page-title">我的</h1>';
@@ -690,22 +882,29 @@
       '<span>' + esc(me.role) + (me.member && me.member.title ? '　' + esc(me.member.title) : '') + '</span>' +
       (me.member ? '<span class="muted">LINE：' + esc(me.lineName) + '</span>' : '') + '</div></section>';
     html += bindSection();
+    if (me.member) html += profileSection(me);
     html += friendNotice();
 
     var mine = S.events.filter(function (e) { return e.myReg && !isPast(e); });
     html += '<section class="block"><div class="block-head"><h2>我報名的活動</h2></div>' +
       (mine.length ? '<div class="rows rows-compact">' + mine.map(eventRow).join('') + '</div>' : '<p class="muted">目前沒有即將參加的活動。</p>') + '</section>';
 
-    if (anyAdmin()) {
+    if (S.docs.length || perm('newsManage')) {
+      html += '<section class="block"><div class="menu"><button type="button" class="menu-item" data-go="docs">' + icon('doc') + '<div><b>文件庫</b><span>' +
+        (S.docs.length ? '章程、會議紀錄、表單等 ' + S.docs.length + ' 份' : '還沒有文件') + '</span></div>' + icon('next', 'chev') + '</button></div></section>';
+    }
+
+    if (anyAdmin() || perm('viewRegs')) {
       var items = [];
       if (canPush()) items.push(['admin/push', 'send', '發送通知', '依角色或活動推播 LINE 訊息']);
       if (perm('eventManage')) items.push(['event-edit/new', 'calendar', '新增活動', '']);
       if (perm('newsManage')) items.push(['news-edit/new', 'edit', '發布消息', '']);
+      if (perm('viewRegs')) items.push(['admin/attendance', 'chart', '出席統計', '全年例會出席率']);
       if (perm('memberManage')) {
         items.push(['admin/requests', 'inbox', '綁定審核', S.pendingCount ? S.pendingCount + ' 筆待處理' : '沒有待處理的申請', S.pendingCount]);
         items.push(['admin/members', 'users', '會員管理', '角色、狀態、LINE 綁定']);
       }
-      html += '<section class="block"><div class="block-head"><h2>管理功能</h2></div><div class="menu">' + items.map(function (it) {
+      html += '<section class="block"><div class="block-head"><h2>' + (anyAdmin() ? '管理功能' : '幹部功能') + '</h2></div><div class="menu">' + items.map(function (it) {
         return '<button type="button" class="menu-item" data-go="' + it[0] + '">' + icon(it[1]) + '<div><b>' + it[2] + '</b>' + (it[3] ? '<span>' + esc(it[3]) + '</span>' : '') + '</div>' +
           (it[4] ? '<i class="count">' + it[4] + '</i>' : '') + icon('next', 'chev') + '</button>';
       }).join('') + '</div></section>';
@@ -736,7 +935,7 @@
       return '<label class="chip-check"><input type="checkbox" name="roles" value="' + esc(r.role) + '"' + (p.roles.indexOf(r.role) >= 0 ? ' checked' : '') + '><span>' + esc(r.role) + '</span></label>';
     }).join('');
     var evOpts = '<option value="">選擇活動</option>' + upcoming.map(function (e) {
-      return '<option value="' + esc(e.id) + '"' + (p.eventId === e.id ? ' selected' : '') + '>' + esc(fmtMD(e.start) + ' ' + e.title) + '</option>';
+      return '<option value="' + esc(e.id) + '"' + (p.eventId === e.id ? ' selected' : '') + '>' + esc(fmtMD(e.start) + ' ' + e.title + (e.audienceLevel > 0 ? '' : '（公開）')) + '</option>';
     }).join('');
     var newsOpts = '<option value="">選擇消息</option>' + S.news.filter(function (n) { return n.status === '發布'; }).map(function (n) {
       return '<option value="' + esc(n.id) + '"' + (p.linkType === 'news' && p.linkId === n.id ? ' selected' : '') + '>' + esc(n.title) + '</option>';
@@ -754,6 +953,7 @@
       radio('all', '全體已綁定會員', '') +
       radio('roles', '指定角色', '') + '<div class="choice-more" data-show="roles"><div class="chips">' + roleChips + '</div></div>' +
       radio('event', '活動報名者', '') + '<div class="choice-more" data-show="event"><select name="eventId" aria-label="活動">' + evOpts + '</select></div>' +
+      radio('eventUnreplied', '活動未回覆者', '限會員以上的活動，提醒還沒回覆出席或請假的人') + '<div class="choice-more" data-show="eventUnreplied"><select name="eventId2" aria-label="活動">' + evOpts + '</select></div>' +
       radio('friends', '所有加入官方帳號的好友', '包含非會員，人數最多、額度用得最快') +
       '</div><p class="estimate" id="estimate" aria-live="polite">' + estimateHtml(p.preview) + '</p></section>';
     html += '<section class="step"><h2><span class="step-n">2</span>內容</h2>' +
@@ -817,7 +1017,7 @@
     var fd = new FormData(form);
     p.mode = fd.get('mode') || 'all';
     p.roles = fd.getAll('roles');
-    p.eventId = fd.get('eventId') || '';
+    p.eventId = (p.mode === 'eventUnreplied' ? fd.get('eventId2') : fd.get('eventId')) || '';
     p.title = fd.get('title') || '';
     p.text = fd.get('text') || '';
     p.linkType = fd.get('linkType') || 'none';
@@ -829,7 +1029,7 @@
   function pushAudience() {
     var p = S.push;
     if (p.mode === 'roles') return { mode: 'roles', roles: p.roles };
-    if (p.mode === 'event') return { mode: 'event', eventId: p.eventId };
+    if (p.mode === 'event' || p.mode === 'eventUnreplied') return { mode: p.mode, eventId: p.eventId };
     return { mode: p.mode };
   }
   var previewTimer = null;
@@ -838,7 +1038,7 @@
     var key = JSON.stringify(pushAudience());
     if (key === p.previewKey && p.preview) return;
     var est = document.getElementById('estimate');
-    if ((p.mode === 'roles' && !p.roles.length) || (p.mode === 'event' && !p.eventId)) {
+    if ((p.mode === 'roles' && !p.roles.length) || ((p.mode === 'event' || p.mode === 'eventUnreplied') && !p.eventId)) {
       p.preview = Object.assign({}, p.preview || {}, { recipients: 0, error: p.mode === 'roles' ? '請至少選一個角色' : '請選擇活動' });
       p.previewKey = '';
       if (est) est.innerHTML = estimateHtml(p.preview);
@@ -891,6 +1091,7 @@
       return !q || (m.name + m.phone + m.id + m.title).toLowerCase().indexOf(q) >= 0;
     });
     if (!list.length) return empty('沒有符合的會員', '');
+    list = list.slice().sort(byLevelThenName);
     return '<div class="rows">' + list.map(function (m) {
       return '<button type="button" class="mrow' + (m.status === '停用' ? ' is-disabled' : '') + '" data-act="editMember" data-id="' + esc(m.id) + '">' +
         '<div class="mrow-main"><b>' + esc(m.name) + '</b><span>' + esc(m.id) + '　' + esc(m.phone) + '</span></div>' +
@@ -946,11 +1147,13 @@
   var VIEWS = {
     home: viewHome, events: viewEvents, event: viewEvent, 'event-edit': viewEventEdit,
     news: function (r) { return r.a ? viewNewsItem(r) : viewNews(); },
-    'news-edit': viewNewsEdit, directory: viewDirectory, me: viewMe,
+    'news-edit': viewNewsEdit, directory: viewDirectory, me: viewMe, checkin: viewCheckin,
+    docs: viewDocs, 'doc-edit': viewDocEdit,
     admin: function (r) {
       if (r.a === 'push') return viewPush();
       if (r.a === 'members') return viewMembers();
       if (r.a === 'requests') return viewRequests();
+      if (r.a === 'attendance') return viewAttendance();
       return viewMe();
     }
   };
@@ -1082,6 +1285,78 @@
     toast(prefix + (push ? '，已通知 ' + push.sent + ' 人' : ''));
   }
 
+  function gcalStamp(iso) {
+    return new Date(iso).toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+  }
+  function googleCalUrl(ev) {
+    var end = ev.end || new Date(Date.parse(ev.start) + 7200000).toISOString();
+    var details = (ev.description ? ev.description + '\n\n' : '') + '報名與詳情：' + Api.liffUrl('event/' + ev.id);
+    return 'https://calendar.google.com/calendar/render?action=TEMPLATE&text=' + encodeURIComponent(ev.title) +
+      '&dates=' + gcalStamp(ev.start) + '/' + gcalStamp(end) + '&details=' + encodeURIComponent(details) +
+      (ev.location ? '&location=' + encodeURIComponent(ev.location) : '') + '&ctz=Asia/Taipei';
+  }
+  function qrSvg(text) {
+    try {
+      var qr = window.qrcode(0, 'M');
+      qr.addData(text);
+      qr.make();
+      return qr.createSvgTag({ cellSize: 6, margin: 2, scalable: true });
+    } catch (e) {
+      return '<p class="muted">無法產生 QR code</p>';
+    }
+  }
+  function qrSheet(ev, q) {
+    var when = q.open ? '<span class="pill is-ok">報到進行中</span>' : '<span class="pill is-muted">報到時間：' + fmtDT(q.from) + ' 起</span>';
+    return '<h2 class="sheet-title">報到 QR code<small>' + esc(ev ? ev.title : '') + '</small></h2>' +
+      '<div class="qr-box">' + qrSvg(q.url) + '</div>' +
+      '<p class="qr-code">報到碼 <b>' + esc(q.code) + '</b></p><p class="sheet-text" style="text-align:center">' + when + '</p>' +
+      '<p class="hint">把這個畫面投影或列印在報到桌，會員用 LINE 掃描（LINE 首頁右上角的掃描）就能自己報到。報到時間為活動開始前 2 小時到結束後 3 小時。</p>' +
+      '<div class="form-actions two"><button type="button" class="btn btn-ghost" data-act="copyText" data-text="' + esc(q.url) + '">' + icon('copy') + '複製連結</button>' +
+      '<button type="button" class="btn btn-ghost" data-act="checkinQr" data-id="' + esc(ev ? ev.id : '') + '" data-renew="1">' + icon('refresh') + '換一組報到碼</button></div>' +
+      '<p class="hint">換報到碼後，舊的 QR code 就失效，適合用在有人把連結外流的時候。</p>';
+  }
+  function walkinRows(cands, q) {
+    q = (q || '').trim().toLowerCase();
+    var list = cands.filter(function (m) { return !q || (m.name + m.role + m.company).toLowerCase().indexOf(q) >= 0; }).slice(0, 40);
+    if (!list.length) return '<p class="muted" style="padding:14px">沒有符合的會員</p>';
+    return list.map(function (m) {
+      return '<button type="button" class="menu-item" data-act="walkinPick" data-id="' + esc(m.id) + '"><span class="avatar avatar-txt">' + esc(m.name.charAt(0)) + '</span><div><b>' + esc(m.name) + '</b><span>' + esc(m.role + (m.title ? '　' + m.title : '')) + '</span></div>' + icon('plus', 'chev') + '</button>';
+    }).join('');
+  }
+
+  /* ═════════════ 畫面：掃碼報到 ═════════════ */
+
+  function viewCheckin(r) {
+    var id = r.a, code = r.b;
+    var detail = ensure('event:' + id, function () { return Api.call('event', { id: id }); });
+    var html = topbar({ back: 'events', title: '活動報到' }) + '<main class="view view-checkin">';
+    if (!detail) return html + skeleton(3) + '</main>';
+    if (detail.__error) return html + errorBlock(detail.__error) + '</main>';
+    var ev = detail;
+    var done = S.checkinDone[id];
+    html += '<div class="checkin-card">' + catTag(ev.category) + '<h1>' + esc(ev.title) + '</h1>' +
+      '<p class="muted">' + esc(fmtWhen(ev.start, ev.end)) + (ev.location ? '　' + esc(ev.location) : '') + '</p>';
+    var mr = ev.myReg;
+    if ((mr && mr.attended) || (done && done.at)) {
+      html += '<div class="checkin-ok">' + icon('checkcircle') + '<b>' + (done && done.already ? '你已經報到過了' : '報到完成') + '</b>' +
+        '<span>' + esc(S.me.member ? S.me.member.name : S.me.lineName) + '　' + fmtDT((mr && mr.attended) || done.at).replace(/^.*?）/, '') + '</span></div>' +
+        '<a class="btn btn-ghost btn-block" href="#/event/' + encodeURIComponent(ev.id) + '" data-nav>查看活動</a>';
+    } else if (done && done.error) {
+      html += '<div class="banner is-danger">' + esc(done.error) + '</div>' +
+        '<button type="button" class="btn btn-primary btn-block" data-act="doCheckin" data-event="' + esc(id) + '" data-code="' + esc(code) + '">再試一次</button>';
+    } else if (!S.me.member && !mr) {
+      html += '<div class="banner is-muted">你還沒有綁定會員身分，也沒有報名這場活動。</div>' +
+        (ev.regOpen ? '<a class="btn btn-primary btn-block" href="#/event/' + encodeURIComponent(ev.id) + '" data-nav>先去報名</a>' : '') +
+        '<a class="btn btn-ghost btn-block" href="#/me" data-nav>綁定會員身分</a>';
+    } else if (!ev.checkinOpen) {
+      html += '<div class="banner is-muted">目前不在報到時間。報到開放：' + esc(fmtDT(ev.checkinFrom)) + ' 到 ' + esc(fmtDT(ev.checkinTo)) + '</div>';
+    } else {
+      html += '<p class="sheet-text">' + esc(S.me.member ? S.me.member.name : S.me.lineName) + (mr ? '，你已報名 ' + mr.count + ' 人' : mr === null && S.me.member ? '，你沒有事先報名，報到後會自動補登' : '') + '</p>' +
+        '<button type="button" class="btn btn-primary btn-block btn-big" data-act="doCheckin" data-event="' + esc(id) + '" data-code="' + esc(code) + '">' + icon('scan') + '我到了，報到</button>';
+    }
+    return html + '</div></main>';
+  }
+
   /** 分享到 LINE 聊天室用的 Flex 訊息 */
   function shareFlex(ev) {
     var rows = [['時間', fmtWhen(ev.start, ev.end)]];
@@ -1151,23 +1426,68 @@
     evFilter: function (el) { S.evFilter = el.getAttribute('data-v'); render(); },
     newsCat: function (el) { S.newsCat = el.getAttribute('data-v'); render(); },
     memFilter: function (el) { S.memFilter = el.getAttribute('data-v'); render(); },
+    dirIndustry: function (el) { S.dirIndustry = el.getAttribute('data-v'); render(); },
+    attYear: function (el) { S.attYear = Number(el.getAttribute('data-v')); render(); },
+    copyAtt: function (el) {
+      var d = S.cache['att:' + el.getAttribute('data-year')];
+      if (!d || !d.members) return;
+      var lines = [d.year + ' 年出席統計（例會 ' + d.meetingTotal + ' 場、其他活動 ' + d.otherTotal + ' 場）', '姓名\t角色\t例會出席\t其他活動'];
+      d.members.forEach(function (m) { lines.push(m.name + '\t' + m.role + '\t' + m.meetingAttended + '/' + d.meetingTotal + '\t' + m.otherAttended + '/' + d.otherTotal); });
+      copyText(lines.join('\n'));
+    },
+    editMe: function () {
+      var m = S.me.member;
+      if (!m) return;
+      var list = '<datalist id="ind-list">' + (S.industries || []).map(function (i) { return '<option value="' + esc(i) + '">'; }).join('') + '</datalist>';
+      openSheet('<h2 class="sheet-title">編輯我的資料<small>姓名與手機如需修改請洽秘書處</small></h2>' +
+        '<form class="form" data-form="updateMe" novalidate>' +
+        field('公司／職業', '<input id="u-company" name="company" maxlength="60" value="' + esc(m.company) + '" autocomplete="organization">', '', 'u-company') +
+        field('行業', '<input id="u-industry" name="industry" maxlength="30" list="ind-list" value="' + esc(m.industry) + '" placeholder="選擇或自行輸入">' + list, '會友在通訊錄可以依行業找到你', 'u-industry') +
+        field('Email', '<input id="u-email" name="email" type="email" inputmode="email" maxlength="80" value="' + esc(m.email) + '" autocomplete="email">', '', 'u-email') +
+        field('生日', '<input id="u-birthday" name="birthday" type="date" value="' + esc(m.birthday) + '" max="' + new Date().toISOString().slice(0, 10) + '">', '生日當天會收到祝福；首頁的「本月壽星」只顯示月日，不顯示年份', 'u-birthday') +
+        '<div class="form-actions"><button type="submit" class="btn btn-primary btn-block">儲存</button></div></form>', '編輯我的資料');
+    },
+    deleteDoc: function (el) {
+      var id = el.getAttribute('data-id');
+      var d = S.docs.filter(function (x) { return x.id === id; })[0];
+      confirmSheet({ title: '刪除這份文件？', body: '「' + esc(d ? d.title : '') + '」會從文件庫移除，雲端硬碟上的檔案不受影響。', ok: '刪除', danger: true }).then(function (fd) {
+        if (!fd) return;
+        return Api.call('deleteDoc', { id: id }).then(function (res) {
+          S.docs = res.docs || S.docs.filter(function (x) { return x.id !== id; });
+          go('docs', true);
+          toast('文件已刪除');
+        });
+      }).catch(fail);
+    },
     openRegister: function (el) {
       var ev = findEvent(el.getAttribute('data-id'));
       if (!ev) return;
       var me = S.me;
-      var count = ev.myReg ? ev.myReg.count : 1;
+      var leaveOnly = el.getAttribute('data-leaveonly') === '1';
+      var wasLeave = !!(ev.myReg && ev.myReg.status === '請假');
+      var mode = leaveOnly || wasLeave ? 'leave' : 'attend';
+      var count = ev.myReg && !wasLeave ? ev.myReg.count : 1;
       var who = me.member
-        ? '<p class="sheet-text">報名人：' + esc(me.member.name) + '（' + esc(me.member.id) + '）</p>'
+        ? '<p class="sheet-text">' + esc(me.member.name) + '（' + esc(me.member.id) + '）</p>'
         : field('姓名', '<input id="r-name" name="name" required autocomplete="name">', '', 'r-name') +
           field('手機', '<input id="r-phone" name="phone" type="tel" inputmode="tel" autocomplete="tel" required placeholder="0912345678">', '主辦單位聯絡你用，不會公開', 'r-phone');
-      openSheet('<h2 class="sheet-title">' + (ev.myReg ? '修改報名' : '報名') + '<small>' + esc(ev.title) + '</small></h2>' +
-        '<form class="form" data-form="register" novalidate><input type="hidden" name="eventId" value="' + esc(ev.id) + '">' + who +
+      var canAttend = ev.regOpen, canLeave = ev.leaveOpen && !!me.member;
+      var seg = canAttend && canLeave ? '<div class="seg seg-reply" role="radiogroup" aria-label="回覆">' +
+        '<label><input type="radio" name="reply" value="出席"' + (mode === 'attend' ? ' checked' : '') + '><span>' + icon('check') + '出席</span></label>' +
+        '<label><input type="radio" name="reply" value="請假"' + (mode === 'leave' ? ' checked' : '') + '><span>' + icon('leave') + '請假</span></label></div>'
+        : '<input type="hidden" name="reply" value="' + (canAttend ? '出席' : '請假') + '">';
+      if (!canAttend) mode = 'leave';
+      var attendFields = '<div data-reply="出席"' + (mode !== 'attend' ? ' hidden' : '') + '>' +
         '<div class="field"><label for="r-count">人數（含本人）</label><div class="stepper">' +
         '<button type="button" class="iconbtn" data-act="step" data-d="-1" aria-label="減少">' + icon('minus') + '</button>' +
         '<input id="r-count" name="count" type="number" min="1" max="10" inputmode="numeric" value="' + count + '">' +
         '<button type="button" class="iconbtn" data-act="step" data-d="1" aria-label="增加">' + icon('plus') + '</button></div></div>' +
-        field('備註', '<textarea id="r-note" name="note" rows="2" maxlength="200" placeholder="例如：吃素、攜伴姓名">' + esc(ev.myReg ? ev.myReg.note : '') + '</textarea>', '', 'r-note') +
-        '<div class="form-actions"><button type="submit" class="btn btn-primary btn-block">' + (ev.myReg ? '更新報名' : '確認報名') + '</button></div></form>', '報名');
+        field('備註', '<textarea id="r-note" name="note" rows="2" maxlength="200" placeholder="例如：吃素、攜伴姓名">' + esc(ev.myReg && !wasLeave ? ev.myReg.note : '') + '</textarea>', '', 'r-note') + '</div>';
+      var leaveFields = '<div data-reply="請假"' + (mode !== 'leave' ? ' hidden' : '') + '>' +
+        field('請假原因（選填）', '<textarea id="r-reason" name="reason" rows="2" maxlength="200" placeholder="例如：出差、家裡有事">' + esc(wasLeave ? ev.myReg.note : '') + '</textarea>', '會顯示給幹部，不會公開', 'r-reason') + '</div>';
+      openSheet('<h2 class="sheet-title">' + (ev.myReg ? '修改回覆' : ev.category === '理監事會' ? '回覆出席' : '報名') + '<small>' + esc(ev.title) + '</small></h2>' +
+        '<form class="form" data-form="register" novalidate><input type="hidden" name="eventId" value="' + esc(ev.id) + '">' + who + seg + attendFields + leaveFields +
+        '<div class="form-actions"><button type="submit" class="btn btn-primary btn-block">' + (mode === 'leave' ? '送出請假' : ev.myReg ? '更新報名' : '確認報名') + '</button></div></form>', '報名');
     },
     step: function (el) {
       var input = el.parentNode.querySelector('input');
@@ -1177,15 +1497,87 @@
     cancelReg: function (el) {
       var id = el.getAttribute('data-id');
       var ev = findEvent(id);
-      confirmSheet({ title: '取消報名？', body: '「' + esc(ev ? ev.title : '') + '」的報名會被取消，名額會釋出給其他人。', ok: '取消報名', cancel: '保留報名', danger: true })
+      var leaving = !!(ev && ev.myReg && ev.myReg.status === '請假');
+      confirmSheet(leaving
+        ? { title: '取消請假？', body: '「' + esc(ev.title) + '」會回到未回覆狀態。', ok: '取消請假', cancel: '返回', danger: true }
+        : { title: '取消報名？', body: '「' + esc(ev ? ev.title : '') + '」的報名會被取消，名額會釋出給其他人。', ok: '取消報名', cancel: '保留報名', danger: true })
         .then(function (fd) {
           if (!fd) return;
           return Api.call('cancelRegistration', { eventId: id }).then(function (ev2) {
             upsertEvent(ev2);
             render();
-            toast('已取消報名');
+            toast(leaving ? '已取消請假' : '已取消報名');
           });
         }).catch(fail);
+    },
+    calendar: function (el) {
+      var ev = findEvent(el.getAttribute('data-id'));
+      if (!ev) return;
+      var g = googleCalUrl(ev);
+      openSheet('<h2 class="sheet-title">加入行事曆<small>' + esc(ev.title) + '</small></h2><div class="menu">' +
+        '<button type="button" class="menu-item" data-act="openUrl" data-url="' + esc(g) + '">' + icon('calendar') + '<div><b>Google 日曆</b><span>Android 手機、或有安裝 Google 日曆</span></div>' + icon('next', 'chev') + '</button>' +
+        (ev.icsUrl ? '<button type="button" class="menu-item" data-act="openUrl" data-url="' + esc(ev.icsUrl) + '">' + icon('calplus') + '<div><b>iPhone 行事曆</b><span>下載行事曆檔後按「加入」</span></div>' + icon('next', 'chev') + '</button>' : '') +
+        '</div>', '加入行事曆');
+    },
+    openUrl: function (el) {
+      closeSheet();
+      Api.openExternal(el.getAttribute('data-url'));
+    },
+    checkinQr: function (el) {
+      var id = el.getAttribute('data-id');
+      var ev = findEvent(id);
+      busy(el, Api.call('checkinQr', { eventId: id, renew: el.getAttribute('data-renew') === '1' })).then(function (q) {
+        if (ev) { ev.checkin = { code: q.code, url: q.url }; }
+        openSheet(qrSheet(ev, q), '報到 QR code');
+      }).catch(fail);
+    },
+    toggleAttend: function (el) {
+      var eventId = el.getAttribute('data-event'), regId = el.getAttribute('data-reg');
+      var on = el.checked;
+      el.disabled = true;
+      Api.call('setAttendance', { eventId: eventId, regId: regId, attended: on }).then(function (ev) {
+        upsertEvent(ev);
+        render();
+      }).catch(function (e) { el.checked = !on; el.disabled = false; fail(e); });
+    },
+    walkin: function (el) {
+      var id = el.getAttribute('data-id');
+      var d = S.cache['event:' + id];
+      var listP = S.cache.directory && !S.cache.directory.__error ? Promise.resolve(S.cache.directory)
+        : Api.call('directory').then(function (l) { S.cache.directory = l; return l; });
+      busy(el, listP).then(function (list) {
+        var have = {};
+        ((d && d.registrations) || []).forEach(function (r) { if (r.memberId) have[r.memberId] = 1; });
+        ((d && d.leaves) || []).forEach(function (r) { if (r.memberId) have[r.memberId] = 1; });
+        var cands = list.filter(function (m) { return !have[m.id]; });
+        openSheet('<h2 class="sheet-title">現場加入<small>選擇到場但沒報名的會員</small></h2>' +
+          '<div class="search">' + icon('search') + '<input type="search" data-filter="walkin" placeholder="搜尋姓名" aria-label="搜尋會員"></div>' +
+          '<div id="walkin-list" class="menu">' + walkinRows(cands, '') + '</div>', '現場加入');
+        S.walkinCands = cands;
+        S.walkinEvent = id;
+      }).catch(fail);
+    },
+    walkinPick: function (el) {
+      var memberId = el.getAttribute('data-id');
+      busy(el, Api.call('setAttendance', { eventId: S.walkinEvent, memberId: memberId })).then(function (ev) {
+        upsertEvent(ev);
+        closeSheet();
+        render();
+        toast('已標記出席');
+      }).catch(fail);
+    },
+    doCheckin: function (el) {
+      var eventId = el.getAttribute('data-event'), code = el.getAttribute('data-code');
+      busy(el, Api.call('checkin', { eventId: eventId, code: code })).then(function (res) {
+        upsertEvent(res.event);
+        S.checkinDone[eventId] = { at: res.event.myReg && res.event.myReg.attended, already: res.already };
+        render();
+        // 更新「我的」出席次數
+        Api.call('init').then(function (d) { S.me = d.me; S.events = d.events || S.events; if (route().name === 'me') render(); }).catch(function () {});
+      }).catch(function (e) {
+        S.checkinDone[eventId] = { error: e.message };
+        render();
+      });
     },
     share: function (el) {
       var ev = findEvent(el.getAttribute('data-id'));
@@ -1198,6 +1590,7 @@
         copyText(ev.title + '\n' + fmtWhen(ev.start, ev.end) + (ev.location ? '\n' + ev.location : '') + '\n' + Api.liffUrl('event/' + ev.id));
       }
     },
+    copyText: function (el) { copyText(el.getAttribute('data-text') || ''); },
     copyRegs: function (el) {
       var d = S.cache['event:' + el.getAttribute('data-id')];
       if (!d || !d.registrations) return;
@@ -1236,9 +1629,11 @@
     pushFor: function (el) {
       var type = el.getAttribute('data-type'), id = el.getAttribute('data-id');
       S.push = pushDefaults();
-      if (type === 'event') {
+      if (type === 'event' || type === 'unreplied') {
         var ev = findEvent(id);
-        Object.assign(S.push, { mode: 'event', eventId: id, linkType: 'event', linkId: id, title: ev ? ev.title + ' 通知' : '' });
+        Object.assign(S.push, { mode: type === 'unreplied' ? 'eventUnreplied' : 'event', eventId: id, linkType: 'event', linkId: id,
+          title: ev ? (type === 'unreplied' ? '請回覆：' + ev.title : ev.title + ' 通知') : '',
+          text: ev && type === 'unreplied' ? fmtWhen(ev.start, ev.end) + (ev.location ? ' ' + ev.location : '') + '\n請到會員專區回覆出席或請假，謝謝。' : '' });
       } else {
         var n = S.news.filter(function (x) { return x.id === id; })[0];
         Object.assign(S.push, { mode: 'all', linkType: 'news', linkId: id, title: n ? n.title : '', text: n ? excerpt(n.content, 120) : '' });
@@ -1360,8 +1755,10 @@
     },
     register: function (form, btn) {
       var fd = new FormData(form);
-      var data = { eventId: fd.get('eventId'), count: Number(fd.get('count')) || 1, note: fd.get('note') || '' };
-      if (!S.me.member) {
+      var leave = fd.get('reply') === '請假';
+      var data = { eventId: fd.get('eventId'), count: Number(fd.get('count')) || 1, note: leave ? (fd.get('reason') || '') : (fd.get('note') || '') };
+      if (leave) data.reply = '請假';
+      if (!S.me.member && !leave) {
         data.name = String(fd.get('name') || '').trim();
         data.phone = String(fd.get('phone') || '').trim();
         if (!data.name || !data.phone) { toast('請填寫姓名與手機', 'error'); return; }
@@ -1371,7 +1768,7 @@
         upsertEvent(ev);
         closeSheet();
         render();
-        toast(wasReg ? '報名已更新' : '報名完成');
+        toast(leave ? '已回覆請假' : wasReg ? '報名已更新' : '報名完成');
       }).catch(fail);
     },
     event: function (form, btn) {
@@ -1380,7 +1777,7 @@
         id: fd.get('id') || '', title: String(fd.get('title') || '').trim(), category: fd.get('category'),
         start: fromInput(fd.get('start')), end: fromInput(fd.get('end')), location: fd.get('location'), mapUrl: fd.get('mapUrl'),
         audience: fd.get('audience'), capacity: fd.get('capacity'), deadline: fromInput(fd.get('deadline')), fee: fd.get('fee'),
-        description: fd.get('description'), imageUrl: fd.get('imageUrl'), status: fd.get('status')
+        description: fd.get('description'), imageUrl: fd.get('imageUrl'), albumUrl: fd.get('albumUrl'), status: fd.get('status')
       };
       if (!e.title) { toast('請填寫活動名稱', 'error'); form.title.focus(); return; }
       if (!e.start) { toast('請選擇開始時間', 'error'); form.start.focus(); return; }
@@ -1408,7 +1805,7 @@
       readPushForm(form);
       var p = S.push;
       if (p.mode === 'roles' && !p.roles.length) { toast('請至少選一個角色', 'error'); return; }
-      if (p.mode === 'event' && !p.eventId) { toast('請選擇活動', 'error'); return; }
+      if ((p.mode === 'event' || p.mode === 'eventUnreplied') && !p.eventId) { toast('請選擇活動', 'error'); return; }
       if (!p.title.trim()) { toast('請填寫標題', 'error'); form.title.focus(); return; }
       if (!p.text.trim()) { toast('請填寫內容', 'error'); form.text.focus(); return; }
       if ((p.linkType === 'event' || p.linkType === 'news') && !p.linkId) { toast('請選擇按鈕要連到哪裡', 'error'); return; }
@@ -1443,6 +1840,28 @@
         replaceMember(m);
         toast('已儲存');
         if (S.me.member && m.id === S.me.member.id) reloadAll();
+      }).catch(fail);
+    },
+    updateMe: function (form, btn) {
+      var fd = new FormData(form);
+      busy(btn, Api.call('updateMe', { company: fd.get('company'), industry: fd.get('industry'), email: fd.get('email'), birthday: fd.get('birthday') })).then(function (me) {
+        S.me = me;
+        delete S.cache.directory;
+        closeSheet();
+        render();
+        toast('資料已更新');
+      }).catch(fail);
+    },
+    doc: function (form, btn) {
+      var fd = new FormData(form);
+      var d = { id: fd.get('id') || '', title: String(fd.get('title') || '').trim(), category: fd.get('category'), url: String(fd.get('url') || '').trim(),
+        description: fd.get('description'), audience: fd.get('audience'), status: fd.get('status') };
+      if (!d.title) { toast('請填寫標題', 'error'); form.title.focus(); return; }
+      if (!/^https:\/\//.test(d.url)) { toast('連結需以 https:// 開頭', 'error'); form.url.focus(); return; }
+      busy(btn, Api.call('saveDoc', { doc: d })).then(function (res) {
+        S.docs = res.docs || S.docs;
+        go('docs', true);
+        toast(d.id ? '文件已更新' : '文件已新增');
       }).catch(fail);
     },
     reqLink: function (form, btn) {
@@ -1511,6 +1930,11 @@
       if (box && Array.isArray(S.cache.directory)) box.innerHTML = directoryList(S.cache.directory);
       return;
     }
+    if (f === 'walkin') {
+      var wl = document.getElementById('walkin-list');
+      if (wl && S.walkinCands) wl.innerHTML = walkinRows(S.walkinCands, t.value);
+      return;
+    }
     if (f === 'mem') {
       S.memQuery = t.value;
       var mb = document.getElementById('mem-list');
@@ -1524,10 +1948,17 @@
       if (lp) lp.innerHTML = linePreview(S.push);
       var c = document.getElementById('p-count');
       if (c) c.textContent = S.push.text.length;
-      if (t.name === 'mode' || t.name === 'roles' || t.name === 'eventId') refreshPushPreview();
+      if (t.name === 'mode' || t.name === 'roles' || t.name === 'eventId' || t.name === 'eventId2') refreshPushPreview();
     }
   });
   document.addEventListener('change', function (e) {
+    if (e.target.name === 'reply' && e.target.closest('form[data-form="register"]')) {
+      var rf = e.target.closest('form');
+      rf.querySelectorAll('[data-reply]').forEach(function (el) { el.hidden = el.getAttribute('data-reply') !== e.target.value; });
+      var sb = rf.querySelector('button[type=submit]');
+      if (sb) sb.textContent = e.target.value === '請假' ? '送出請假' : '確認報名';
+      return;
+    }
     var pf = e.target.closest && e.target.closest('form[data-form="push"]');
     if (pf && (e.target.type === 'radio' || e.target.type === 'checkbox' || e.target.tagName === 'SELECT')) {
       readPushForm(pf);
