@@ -65,7 +65,8 @@ window.Mock = (function () {
     var thisMonth = new Date().getMonth() + 1;
     var m = function (id, name, phone, role, title, company, year, uid, industry, bday) {
       return { id: id, name: name, phone: phone, role: role, title: title, company: company, industry: industry || '', email: '',
-        birthday: bday || '', joinYear: year, status: '啟用', lineUid: uid || '', lineName: '', boundAt: uid ? at(-60, 10) : '' };
+        birthday: bday || '', joinYear: year, status: '啟用', lineUid: uid || '', lineName: '', boundAt: uid ? at(-60, 10) : '',
+        phoneConsent: (uid && id !== 'M001' && id !== 'M008') ? at(-50, 10) : '' };
     };
     var md = function (d) { return '1990-' + (thisMonth < 10 ? '0' : '') + thisMonth + '-' + (d < 10 ? '0' : '') + d; };
     db = {
@@ -176,7 +177,7 @@ window.Mock = (function () {
       uid: c.uid, lineName: c.lineName, picture: '', bound: !!c.member, disabled: c.disabled,
       role: c.roleName, level: c.level, perms: clone(c.perms),
       member: c.member ? { id: c.member.id, name: c.member.name, phone: c.member.phone, title: c.member.title, company: c.member.company, industry: c.member.industry,
-        email: c.member.email, birthday: c.member.birthday, joinYear: c.member.joinYear } : null,
+        email: c.member.email, birthday: c.member.birthday, joinYear: c.member.joinYear, phoneConsent: c.member.phoneConsent || '' } : null,
       attendance: c.member ? memberAttendance(c.member.id, attendanceIndex(new Date().getFullYear())) : null,
       pendingRequest: !c.member && pend ? { id: pend.id, name: pend.name, createdAt: pend.createdAt } : null
     };
@@ -445,6 +446,11 @@ window.Mock = (function () {
       Object.assign(c.member, { company: String(d.company || '').trim().slice(0, 60), industry: String(d.industry || '').trim().slice(0, 30), email: email, birthday: b });
       return meOut(ctx());
     },
+    phoneConsent: function (c, d) {
+      if (!c.member) throw err('FORBIDDEN', '請先完成會員綁定');
+      c.member.phoneConsent = d.agree ? new Date().toISOString() : '';
+      return meOut(ctx());
+    },
     register: function (c, d) {
       var e = findEvent(d.eventId, c);
       var regs = activeRegs(e.id), mine = null, others = 0;
@@ -561,7 +567,8 @@ window.Mock = (function () {
     directory: function () {
       return db.members.filter(function (m) { return m.status !== '停用'; }).map(function (m) {
         var r = BY[m.role];
-        return { id: m.id, name: m.name, role: m.role, level: r ? r.level : 0, title: m.title, company: m.company, industry: m.industry || '', phone: m.phone, email: m.email, joinYear: m.joinYear };
+        return { id: m.id, name: m.name, role: m.role, level: r ? r.level : 0, title: m.title, company: m.company, industry: m.industry || '',
+          phone: m.phoneConsent ? m.phone : '', phoneHidden: !m.phoneConsent, email: m.email, joinYear: m.joinYear };
       }).sort(function (a, b) { return (b.level - a.level) || a.id.localeCompare(b.id); });
     },
     saveEvent: function (c, d) {
