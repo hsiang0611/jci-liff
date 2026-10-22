@@ -10,6 +10,22 @@
   'use strict';
 
   var CFG = window.APP_CONFIG || {};
+
+  /**
+   * 「同意顯示電話於通訊錄」條文。要修改文字就改這裡，每一項一行。
+   * 修改後建議同時更新 PHONE_TERMS_VERSION，讓已同意的會員下次打開時重新閱讀。
+   */
+  var PHONE_TERMS_VERSION = '2026-10';
+  var PHONE_TERMS = [
+    ['蒐集目的', '為便利本會會友間聯繫會務、活動與交流，本會將您的手機號碼顯示於會員專區的「會員通訊錄」。'],
+    ['查閱對象', '僅限已完成 LINE 綁定、且角色具有「查看通訊錄」權限的本會會友（例如會員、幹部、特友）可以查閱；訪客、預備會員及未綁定者無法查閱。'],
+    ['使用限制', '會友查閱後，僅得用於本會會務與活動聯繫，不得轉作商業行銷、提供第三人、或公開張貼於網路及群組。'],
+    ['保存期間', '自您同意之日起，至您撤回同意、會籍終止或帳號停用為止。'],
+    ['您的權利', '您可以隨時在「我的資料」撤回同意，撤回後通訊錄立即不再顯示您的電話。您也可以向秘書處請求查詢、更正或刪除您的個人資料。'],
+    ['未同意時', '您的姓名、職稱、公司等資料仍會顯示於通訊錄，但不顯示電話。活動報名時留給主辦單位的電話，僅供該活動聯繫使用，不受本同意影響。'],
+    ['資料保護', '本會依個人資料保護法妥善保管會員資料，不會將您的資料提供給本會以外的單位。本說明如有修改，會在會員專區公告並請您重新確認。']
+  ];
+
   var $app = document.getElementById('app');
   var $tabbar = document.getElementById('tabbar');
   var $toast = document.getElementById('toast');
@@ -820,7 +836,8 @@
         return '<details class="drow"><summary><span class="avatar avatar-txt">' + esc(m.name.charAt(0)) + '</span><div class="drow-main"><b>' + esc(m.name) + '</b>' +
           '<span>' + esc([m.title, m.company].filter(Boolean).join('　')) + '</span></div>' +
           (m.phone ? '<a class="iconbtn" href="tel:' + esc(m.phone) + '" aria-label="打電話給' + esc(m.name) + '">' + icon('phone') + '</a>' : '') + '</summary>' +
-          '<dl class="drow-more">' + (m.phone ? '<div><dt>手機</dt><dd><a href="tel:' + esc(m.phone) + '">' + esc(m.phone) + '</a></dd></div>' : '') +
+          '<dl class="drow-more">' + (m.phone ? '<div><dt>手機</dt><dd><a href="tel:' + esc(m.phone) + '">' + esc(m.phone) + '</a></dd></div>'
+            : m.phoneHidden ? '<div><dt>手機</dt><dd class="muted">未公開（本人未同意顯示）</dd></div>' : '') +
           (m.email ? '<div><dt>Email</dt><dd><a href="mailto:' + esc(m.email) + '">' + esc(m.email) + '</a></dd></div>' : '') +
           (m.company ? '<div><dt>公司</dt><dd>' + esc(m.company) + '</dd></div>' : '') +
           (m.industry ? '<div><dt>行業</dt><dd>' + esc(m.industry) + '</dd></div>' : '') +
@@ -866,6 +883,11 @@
       '<button type="button" class="linkbtn" data-act="editMe">' + icon('edit') + '編輯</button></div>';
     html += filled.length ? '<dl class="kv">' + filled.map(function (r) { return '<div><dt>' + r[0] + '</dt><dd>' + esc(r[1]) + '</dd></div>'; }).join('') + '</dl>'
       : '<p class="muted">補上公司、行業與生日，會友才找得到你，壽星祝福也才收得到。</p>';
+    var agreed = !!m.phoneConsent;
+    html += '<div class="consent-row' + (agreed ? ' is-on' : '') + '"><div>' + icon(agreed ? 'checkcircle' : 'phone') +
+      '<div><b>' + (agreed ? '通訊錄顯示我的電話' : '通訊錄不顯示我的電話') + '</b><span>' +
+      (agreed ? '已於 ' + fmtDate(m.phoneConsent) + ' 同意，只有本會會友看得到' : '同意後，會友才能在通訊錄看到你的手機') + '</span></div></div>' +
+      '<button type="button" class="btn btn-ghost btn-small" data-act="phoneConsent">' + (agreed ? '撤回' : '同意顯示') + '</button></div>';
     if (a && (a.meetingTotal || a.otherTotal)) {
       var pct = a.meetingTotal ? Math.round(a.meetingAttended / a.meetingTotal * 100) : 0;
       html += '<div class="att-me"><div class="att-row"><span>' + a.year + ' 年例會出席</span><b>' + a.meetingAttended + '／' + a.meetingTotal + '</b></div>' +
@@ -1285,6 +1307,23 @@
     toast(prefix + (push ? '，已通知 ' + push.sent + ' 人' : ''));
   }
 
+  /** 條文要捲到最底才能勾選；內容本來就放得下時直接開放 */
+  function armTermsGate() {
+    var box = document.getElementById('terms'), cb = document.getElementById('agree-box'), hint = document.getElementById('terms-hint');
+    if (!box || !cb) return;
+    function unlock() {
+      cb.disabled = false;
+      cb.closest('.check').classList.remove('is-gated');
+      if (hint) hint.textContent = '已讀完說明，可以勾選同意。';
+      box.removeEventListener('scroll', check);
+    }
+    function check() {
+      if (box.scrollTop + box.clientHeight >= box.scrollHeight - 6) unlock();
+    }
+    box.addEventListener('scroll', check);
+    check();
+  }
+
   function gcalStamp(iso) {
     return new Date(iso).toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
   }
@@ -1447,6 +1486,33 @@
         field('Email', '<input id="u-email" name="email" type="email" inputmode="email" maxlength="80" value="' + esc(m.email) + '" autocomplete="email">', '', 'u-email') +
         field('生日', '<input id="u-birthday" name="birthday" type="date" value="' + esc(m.birthday) + '" max="' + new Date().toISOString().slice(0, 10) + '">', '生日當天會收到祝福；首頁的「本月壽星」只顯示月日，不顯示年份', 'u-birthday') +
         '<div class="form-actions"><button type="submit" class="btn btn-primary btn-block">儲存</button></div></form>', '編輯我的資料');
+    },
+    phoneConsent: function () {
+      var m = S.me.member;
+      if (!m) return;
+      if (m.phoneConsent) {
+        confirmSheet({ title: '撤回同意？', body: '撤回後，通訊錄立即不再顯示你的電話。之後想重新顯示，需要再閱讀一次說明並同意。', ok: '撤回同意', cancel: '保留', danger: true })
+          .then(function (fd) {
+            if (!fd) return;
+            return Api.call('phoneConsent', { agree: false }).then(function (me) {
+              S.me = me;
+              delete S.cache.directory;
+              render();
+              toast('已撤回，通訊錄不再顯示你的電話');
+            });
+          }).catch(fail);
+        return;
+      }
+      openSheet('<h2 class="sheet-title">同意顯示電話於通訊錄<small>請先讀完以下說明</small></h2>' +
+        '<div class="terms" id="terms" tabindex="0" aria-label="個人電話資訊使用說明">' +
+        '<p class="terms-head">個人電話資訊使用說明（' + esc(PHONE_TERMS_VERSION) + ' 版）</p><ol>' +
+        PHONE_TERMS.map(function (t) { return '<li><b>' + esc(t[0]) + '</b>' + esc(t[1]) + '</li>'; }).join('') +
+        '</ol><p class="terms-end">— 以上說明到此結束 —</p></div>' +
+        '<p class="hint" id="terms-hint">請將說明捲動到最後，才能勾選同意。</p>' +
+        '<form class="form" data-form="phoneConsent" novalidate>' +
+        '<label class="check is-gated"><input type="checkbox" name="agree" id="agree-box" disabled><span>我已閱讀並同意上述說明，願意將我的電話顯示於本會會員通訊錄，僅供本會會友查閱。</span></label>' +
+        '<div class="form-actions"><button type="submit" class="btn btn-primary btn-block" disabled>同意並顯示電話</button></div></form>', '同意顯示電話');
+      setTimeout(armTermsGate, 50);
     },
     deleteDoc: function (el) {
       var id = el.getAttribute('data-id');
@@ -1843,6 +1909,18 @@
         if (S.me.member && m.id === S.me.member.id) reloadAll();
       }).catch(fail);
     },
+    phoneConsent: function (form, btn) {
+      var cb = form.querySelector('#agree-box');
+      if (!cb || cb.disabled) { toast('請先把說明捲動到最後', 'error'); return; }
+      if (!cb.checked) { toast('請勾選同意', 'error'); return; }
+      busy(btn, Api.call('phoneConsent', { agree: true, version: PHONE_TERMS_VERSION })).then(function (me) {
+        S.me = me;
+        delete S.cache.directory;
+        closeSheet();
+        render();
+        toast('已同意，通訊錄會顯示你的電話');
+      }).catch(fail);
+    },
     updateMe: function (form, btn) {
       var fd = new FormData(form);
       busy(btn, Api.call('updateMe', { company: fd.get('company'), industry: fd.get('industry'), email: fd.get('email'), birthday: fd.get('birthday') })).then(function (me) {
@@ -1953,6 +2031,11 @@
     }
   });
   document.addEventListener('change', function (e) {
+    if (e.target.id === 'agree-box') {
+      var sb = e.target.closest('form').querySelector('button[type=submit]');
+      if (sb) sb.disabled = !e.target.checked;
+      return;
+    }
     if (e.target.name === 'reply' && e.target.closest('form[data-form="register"]')) {
       var rf = e.target.closest('form');
       rf.querySelectorAll('[data-reply]').forEach(function (el) { el.hidden = el.getAttribute('data-reply') !== e.target.value; });
