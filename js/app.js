@@ -35,12 +35,23 @@
     ready: false, demo: false,
     me: null, roles: [], events: [], news: [], categories: { event: [], news: [] },
     pendingCount: 0, friend: null, docs: [], birthdays: [], industries: [],
+    polls: [], catColors: { event: {}, news: {} }, meetingCategories: ['例會'],
+    evView: pref('jci.evView') === 'month' ? 'month' : 'list', calMonth: 0, calDay: 0, dirTab: 'people',
     cache: {},
     dirIndustry: '', attYear: 0, checkinDone: {},
     evFilter: 'upcoming', newsCat: '', dirQuery: '', memQuery: '', memFilter: '',
     bindResult: null,
     push: null
   };
+  /** 個人偏好（例如活動用列表或月曆），存在這支手機；讀不到就用預設值 */
+  function pref(key, value) {
+    try {
+      if (value === undefined) return window.localStorage.getItem(key);
+      window.localStorage.setItem(key, value);
+    } catch (e) { /* 無痕模式等情況，忽略 */ }
+    return null;
+  }
+
   var loading = {};
   var lastPath = null;
   var navDepth = 0;
@@ -117,8 +128,19 @@
     '聯誼': '#C2407A', '國際交流': '#0E8C8C', '會務公告': '#0567B1', '活動花絮': '#E8590C',
     '會員動態': '#1B8A5A', '國際青商': '#0E8C8C'
   };
+  /** 類別顏色：先用「類別」工作表設定的顏色，沒設定的依名稱固定配一個顏色 */
+  var CAT_PALETTE = ['#0567B1', '#4B4FA8', '#1B8A5A', '#E8590C', '#C2407A', '#0E8C8C', '#8E5BB5', '#6E7B8B', '#B7791F'];
+  function catColor(cat) {
+    var c = S.catColors || {};
+    var v = (c.event && c.event[cat]) || (c.news && c.news[cat]) || CAT_COLOR[cat];
+    if (v) return v;
+    if (!cat || cat === '其他') return '#8A94A3';
+    var h = 0;
+    for (var i = 0; i < cat.length; i++) h = (h * 31 + cat.charCodeAt(i)) >>> 0;
+    return CAT_PALETTE[h % CAT_PALETTE.length];
+  }
   function catTag(cat) {
-    return '<span class="cat" style="--c:' + (CAT_COLOR[cat] || '#8A94A3') + '">' + esc(cat || '其他') + '</span>';
+    return '<span class="cat" style="--c:' + esc(catColor(cat)) + '">' + esc(cat || '其他') + '</span>';
   }
 
   /** 姓名依筆畫排序（繁體中文排序規則：先比姓氏筆畫，同姓再比下一個字） */
@@ -188,7 +210,13 @@
     leave: '<circle cx="12" cy="12" r="9"/><path d="M9 9l6 6M15 9l-6 6"/>',
     chart: 'M4 20V10M10 20V4M16 20v-7M22 20H2',
     checkcircle: '<circle cx="12" cy="12" r="9"/><path d="m8 12.5 2.8 2.8L16.5 9.5"/>',
-    scan: '<path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M4 12h16"/>'
+    scan: '<path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M4 12h16"/>',
+    list: 'M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01',
+    vote: '<rect x="4" y="4" width="16" height="16" rx="3"/><path d="m8.5 12 2.5 2.5 4.5-5"/>',
+    gift: '<rect x="3.5" y="8.5" width="17" height="4" rx="1"/><path d="M5 12.5v8h14v-8M12 8.5v12M12 8.5C10.5 5 6.5 4.5 6.5 7S10 8.5 12 8.5zM12 8.5c1.5-3.5 5.5-4 5.5-1.5S14 8.5 12 8.5z"/>',
+    store: '<path d="M4 9.5 5.5 4.5h13L20 9.5M4 9.5h16M4 9.5a2.7 2.7 0 0 0 5.3 0 2.7 2.7 0 0 0 5.4 0 2.7 2.7 0 0 0 5.3 0M5 11.5V20h14v-8.5M10 20v-5h4v5"/>',
+    award: '<circle cx="12" cy="9" r="5.5"/><path d="M8.6 13.4 7 21l5-2.5 5 2.5-1.6-7.6"/>',
+    swap: 'M4 8h14l-3.5-3.5M20 16H6l3.5 3.5'
   };
   function icon(name, cls) {
     var p = ICONS[name] || '';
@@ -272,6 +300,9 @@
     S.docs = d.docs || [];
     S.birthdays = d.birthdays || [];
     S.industries = d.industries || [];
+    S.polls = d.polls || [];
+    S.catColors = d.catColors || { event: {}, news: {} };
+    S.meetingCategories = d.meetingCategories && d.meetingCategories.length ? d.meetingCategories : ['例會'];
     S.cache = {};
   }
 
@@ -433,6 +464,7 @@
     if (canPush()) items.push('<button type="button" class="chip-btn" data-go="admin/push">' + icon('send') + '發送通知</button>');
     if (perm('eventManage')) items.push('<button type="button" class="chip-btn" data-go="event-edit/new">' + icon('plus') + '新增活動</button>');
     if (perm('newsManage')) items.push('<button type="button" class="chip-btn" data-go="news-edit/new">' + icon('edit') + '發布消息</button>');
+    if (perm('newsManage')) items.push('<button type="button" class="chip-btn" data-go="poll-edit/new">' + icon('vote') + '新增調查</button>');
     if (perm('memberManage')) items.push('<button type="button" class="chip-btn" data-go="admin/requests">' + icon('inbox') + '綁定審核' +
       (S.pendingCount ? '<i class="count">' + S.pendingCount + '</i>' : '') + '</button>');
     return '<div class="shortcuts" role="group" aria-label="管理功能">' + items.join('') + '</div>';
@@ -442,7 +474,7 @@
     var upcoming = S.events.filter(function (e) { return !isPast(e) && e.status === '發布'; });
     var next = upcoming[0];
     var rest = upcoming.slice(1, 4);
-    var html = topbar() + '<main class="view view-home">' + memberCard() + friendNotice() + adminShortcuts();
+    var html = topbar() + '<main class="view view-home">' + memberCard() + progressMini() + friendNotice() + adminShortcuts();
 
     html += '<section class="block"><div class="block-head"><h2>下一場活動</h2><a href="#/events" data-tab="events">全部活動</a></div>';
     if (next) {
@@ -458,6 +490,13 @@
       html += empty('近期沒有排定的活動', '有新活動時會在這裡出現。');
     }
     html += '</section>';
+
+    var openPolls = S.polls.filter(function (p) { return p.open; });
+    if (openPolls.length) {
+      openPolls.sort(function (a, b) { return (!!a.myChoices - !!b.myChoices) || (a.deadline || '9999').localeCompare(b.deadline || '9999'); });
+      html += '<section class="block"><div class="block-head"><h2>調查</h2><a href="#/polls" data-go="polls">全部調查</a></div><div class="rows">' +
+        openPolls.slice(0, 3).map(pollRow).join('') + '</div></section>';
+    }
 
     var news = S.news.filter(function (n) { return n.status === '發布'; }).slice(0, 3);
     html += '<section class="block"><div class="block-head"><h2>最新消息</h2><a href="#/news" data-tab="news">全部消息</a></div>' +
@@ -490,8 +529,14 @@
       return '<button type="button" role="tab" aria-selected="' + (f === s[0]) + '" data-act="evFilter" data-v="' + s[0] + '">' + s[1] + '</button>';
     }).join('');
     var add = perm('eventManage') ? '<button type="button" class="btn btn-small" data-go="event-edit/new">' + icon('plus') + '新增活動</button>' : '';
+    var month = S.evView === 'month';
+    var toggle = '<div class="viewtoggle" role="group" aria-label="檢視方式">' +
+      '<button type="button" data-act="evView" data-v="list" aria-pressed="' + !month + '" aria-label="列表">' + icon('list') + '</button>' +
+      '<button type="button" data-act="evView" data-v="month" aria-pressed="' + month + '" aria-label="月曆">' + icon('calendar') + '</button></div>';
+    var head = '<div class="page-head"><h1 class="page-title">活動</h1><div class="page-tools">' + toggle + add + '</div></div>';
+    if (month) return topbar() + '<main class="view">' + head + monthView() + '</main>';
     var emptyText = { upcoming: ['近期沒有排定的活動', '有新活動時會在這裡出現。'], mine: ['你還沒有報名任何活動', '到「即將舉行」挑一場吧。'], past: ['近 4 個月沒有已結束的活動', ''] }[f];
-    return topbar() + '<main class="view"><div class="page-head"><h1 class="page-title">活動</h1>' + add + '</div>' +
+    return topbar() + '<main class="view">' + head +
       '<div class="seg" role="tablist" aria-label="活動篩選">' + seg + '</div>' +
       (list.length ? eventList(list) : empty(emptyText[0], emptyText[1])) + '</main>';
   }
@@ -627,7 +672,11 @@
     }).join('');
   }
   function catOptions(list, selected) {
+    if (selected && list.indexOf(selected) < 0) list = [selected].concat(list); // 類別已從清單移除，編輯時保留原值
     return list.map(function (c) { return '<option' + (c === selected ? ' selected' : '') + '>' + esc(c) + '</option>'; }).join('');
+  }
+  function firstCat(list, preferred) {
+    return list.indexOf(preferred) >= 0 ? preferred : (list[0] || '其他');
   }
   function field(label, input, hint, id) {
     return '<div class="field"><label' + (id ? ' for="' + id + '"' : '') + '>' + label + '</label>' + input + (hint ? '<p class="hint">' + hint + '</p>' : '') + '</div>';
@@ -636,7 +685,7 @@
   function viewEventEdit(r) {
     if (!perm('eventManage')) return forbidden();
     var isNew = r.a === 'new';
-    var ev = isNew ? { category: '例會', audience: '會員', status: '發布', capacity: 0 } :
+    var ev = isNew ? { category: firstCat(S.categories.event, '例會'), audience: '會員', status: '發布', capacity: 0 } :
       S.events.filter(function (e) { return e.id === r.a; })[0];
     if (!ev) return topbar({ back: 'events', title: '編輯活動' }) + '<main class="view">' + empty('找不到這個活動', '') + '</main>';
     var html = topbar({ back: isNew ? 'events' : 'event/' + ev.id, title: isNew ? '新增活動' : '編輯活動' });
@@ -701,7 +750,7 @@
   function viewNewsEdit(r) {
     if (!perm('newsManage')) return forbidden();
     var isNew = r.a === 'new';
-    var n = isNew ? { category: '會務公告', audience: '會員', status: '發布' } : S.news.filter(function (x) { return x.id === r.a; })[0];
+    var n = isNew ? { category: firstCat(S.categories.news, '會務公告'), audience: '會員', status: '發布' } : S.news.filter(function (x) { return x.id === r.a; })[0];
     if (!n) return topbar({ back: 'news', title: '編輯消息' }) + '<main class="view">' + empty('找不到這則消息', '') + '</main>';
     return topbar({ back: isNew ? 'news' : 'news/' + n.id, title: isNew ? '發布消息' : '編輯消息' }) +
       '<main class="view"><form class="form" data-form="news" novalidate><input type="hidden" name="id" value="' + esc(n.id || '') + '">' +
@@ -748,7 +797,7 @@
   function viewDocEdit(r) {
     if (!perm('newsManage')) return forbidden();
     var isNew = r.a === 'new';
-    var d = isNew ? { category: '章程規章', audience: '會員', status: '發布' } : S.docs.filter(function (x) { return x.id === r.a; })[0];
+    var d = isNew ? { category: firstCat(S.categories.doc || [], '章程規章'), audience: '會員', status: '發布' } : S.docs.filter(function (x) { return x.id === r.a; })[0];
     if (!d) return topbar({ back: 'docs', title: '編輯文件' }) + '<main class="view">' + empty('找不到這份文件', '') + '</main>';
     return topbar({ back: 'docs', title: isNew ? '新增文件' : '編輯文件' }) +
       '<main class="view"><form class="form" data-form="doc" novalidate><input type="hidden" name="id" value="' + esc(d.id || '') + '">' +
@@ -780,7 +829,8 @@
     }).join('') + '</div>';
     if (!d) return html + skeleton(6) + '</main>';
     if (d.__error) return html + errorBlock(d.__error) + '</main>';
-    html += '<p class="summary">' + d.year + ' 年已舉行例會 <b>' + d.meetingTotal + '</b> 場，其他活動 <b>' + d.otherTotal + '</b> 場。出席以掃碼報到或幹部點名為準。</p>';
+    html += '<p class="summary">' + d.year + ' 年已舉行例會 <b>' + d.meetingTotal + '</b> 場，其他活動 <b>' + d.otherTotal + '</b> 場。出席以掃碼報到或幹部點名為準。' +
+      (S.meetingCategories.length > 1 ? '「例會」包含：' + esc(S.meetingCategories.join('、')) + '。' : '') + '</p>';
     if (!d.meetingTotal && !d.otherTotal) return html + empty('這一年還沒有已舉行的活動', '') + '</main>';
     html += '<div class="att-table"><div class="att-head"><span>會員</span><span>例會</span><span>其他</span></div>' + d.members.map(function (m) {
       var pct = d.meetingTotal ? Math.round(m.meetingAttended / d.meetingTotal * 100) : 0;
@@ -812,12 +862,19 @@
           inds.map(function (i) { return '<button type="button" role="tab" aria-selected="' + (S.dirIndustry === i) + '" data-act="dirIndustry" data-v="' + esc(i) + '">' + esc(i) + '</button>'; }).join('') + '</div>';
       }
     }
-    return topbar() + '<main class="view"><h1 class="page-title">會員通訊錄</h1>' +
-      '<div class="search">' + icon('search') + '<input type="search" data-filter="dir" placeholder="搜尋姓名、職稱、公司" value="' + esc(S.dirQuery) + '" aria-label="搜尋會員"></div>' +
+    var shops = list && !list.__error ? list.filter(function (m) { return m.shop; }).length : 0;
+    var tab = S.dirTab === 'shops' ? 'shops' : 'people';
+    var seg = '<div class="seg" role="tablist" aria-label="通訊錄分頁">' +
+      '<button type="button" role="tab" aria-selected="' + (tab === 'people') + '" data-act="dirTab" data-v="people">會友</button>' +
+      '<button type="button" role="tab" aria-selected="' + (tab === 'shops') + '" data-act="dirTab" data-v="shops">會友商家' + (shops ? '（' + shops + '）' : '') + '</button></div>';
+    return topbar() + '<main class="view"><div class="page-head"><h1 class="page-title">會員通訊錄</h1>' +
+      '<button type="button" class="btn btn-small btn-ghost" data-go="officers">' + icon('award') + '歷屆幹部</button></div>' + seg +
+      '<div class="search" style="margin-top:12px">' + icon('search') + '<input type="search" data-filter="dir" placeholder="' + (tab === 'shops' ? '搜尋商家、地址、優惠' : '搜尋姓名、職稱、公司') + '" value="' + esc(S.dirQuery) + '" aria-label="搜尋"></div>' +
       chips + body + '</main>';
   }
 
   function directoryList(list) {
+    if (S.dirTab === 'shops') return shopList(list);
     var q = S.dirQuery.trim().toLowerCase();
     if (S.dirIndustry) list = list.filter(function (m) { return m.industry === S.dirIndustry; });
     if (q) list = list.filter(function (m) { return (m.name + m.title + m.company + m.role + (m.industry || '')).toLowerCase().indexOf(q) >= 0; });
@@ -848,6 +905,7 @@
           (m.company ? '<div><dt>公司</dt><dd>' + esc(m.company) + '</dd></div>' : '') +
           (m.industry ? '<div><dt>行業</dt><dd>' + esc(m.industry) + '</dd></div>' : '') +
           (m.joinYear ? '<div><dt>入會</dt><dd>' + esc(m.joinYear) + ' 年</dd></div>' : '') +
+          (m.shop ? '<div><dt>商家</dt><dd><button type="button" class="linkbtn" data-act="dirTab" data-v="shops" data-q="' + esc(m.shop.name) + '">' + esc(m.shop.name) + '</button></dd></div>' : '') +
           '<div><dt>會員編號</dt><dd>' + esc(m.id) + '</dd></div></dl></details>';
       }).join('') + '</div>';
     }).join('');
@@ -910,16 +968,27 @@
       '<span>' + esc(me.role) + (me.member && me.member.title ? '　' + esc(me.member.title) : '') + '</span>' +
       (me.member ? '<span class="muted">LINE：' + esc(me.lineName) + '</span>' : '') + '</div></section>';
     html += bindSection();
-    if (me.member) html += profileSection(me);
+    if (me.member) html += progressSection(me) + profileSection(me) + shopSection(me);
     html += friendNotice();
 
     var mine = S.events.filter(function (e) { return e.myReg && !isPast(e); });
     html += '<section class="block"><div class="block-head"><h2>我報名的活動</h2></div>' +
       (mine.length ? '<div class="rows rows-compact">' + mine.map(eventRow).join('') + '</div>' : '<p class="muted">目前沒有即將參加的活動。</p>') + '</section>';
 
+    var more = [];
     if (S.docs.length || perm('newsManage')) {
-      html += '<section class="block"><div class="menu"><button type="button" class="menu-item" data-go="docs">' + icon('doc') + '<div><b>文件庫</b><span>' +
-        (S.docs.length ? '章程、會議紀錄、表單等 ' + S.docs.length + ' 份' : '還沒有文件') + '</span></div>' + icon('next', 'chev') + '</button></div></section>';
+      more.push(['docs', 'doc', '文件庫', S.docs.length ? '章程、會議紀錄、表單等 ' + S.docs.length + ' 份' : '還沒有文件']);
+    }
+    if (me.member && (S.polls.length || perm('newsManage'))) {
+      var todo = S.polls.filter(function (p) { return p.open && !p.myChoices; }).length;
+      more.push(['polls', 'vote', '調查', todo ? todo + ' 份等你回覆' : '時間、地點調查', todo]);
+    }
+    if (perm('directory')) more.push(['officers', 'award', '歷屆幹部', '本屆與歷年幹部名單']);
+    if (more.length) {
+      html += '<section class="block"><div class="menu">' + more.map(function (it) {
+        return '<button type="button" class="menu-item" data-go="' + it[0] + '">' + icon(it[1]) + '<div><b>' + it[2] + '</b><span>' + esc(it[3]) + '</span></div>' +
+          (it[4] ? '<i class="count">' + it[4] + '</i>' : '') + icon('next', 'chev') + '</button>';
+      }).join('') + '</div></section>';
     }
 
     if (anyAdmin() || perm('viewRegs')) {
@@ -927,10 +996,13 @@
       if (canPush()) items.push(['admin/push', 'send', '發送通知', '依角色或活動推播 LINE 訊息']);
       if (perm('eventManage')) items.push(['event-edit/new', 'calendar', '新增活動', '']);
       if (perm('newsManage')) items.push(['news-edit/new', 'edit', '發布消息', '']);
+      if (perm('newsManage')) items.push(['poll-edit/new', 'vote', '新增調查', '時間、地點、意見調查']);
       if (perm('viewRegs')) items.push(['admin/attendance', 'chart', '出席統計', '全年例會出席率']);
+      if (perm('viewRegs')) items.push(['admin/prospects', 'flag', '入會進度', '預備會員的入會條件完成度']);
       if (perm('memberManage')) {
         items.push(['admin/requests', 'inbox', '綁定審核', S.pendingCount ? S.pendingCount + ' 筆待處理' : '沒有待處理的申請', S.pendingCount]);
         items.push(['admin/members', 'users', '會員管理', '角色、狀態、LINE 綁定']);
+        items.push(['admin/handover', 'swap', '年度交接', '存檔卸任幹部、一次更新新年度職務']);
       }
       html += '<section class="block"><div class="block-head"><h2>' + (anyAdmin() ? '管理功能' : '幹部功能') + '</h2></div><div class="menu">' + items.map(function (it) {
         return '<button type="button" class="menu-item" data-go="' + it[0] + '">' + icon(it[1]) + '<div><b>' + it[2] + '</b>' + (it[3] ? '<span>' + esc(it[3]) + '</span>' : '') + '</div>' +
@@ -947,7 +1019,7 @@
   /* ═════════════ 畫面：發送通知 ═════════════ */
 
   function pushDefaults() {
-    return { mode: 'all', roles: [], eventId: '', title: '', text: '', linkType: 'home', linkId: '', linkUrl: '', preview: null, previewKey: '' };
+    return { mode: 'all', roles: [], eventId: '', pollId: '', title: '', text: '', linkType: 'home', linkId: '', linkUrl: '', when: 'now', sendAt: '', preview: null, previewKey: '' };
   }
 
   function viewPush() {
@@ -971,6 +1043,13 @@
     var linkEvOpts = '<option value="">選擇活動</option>' + upcoming.map(function (e) {
       return '<option value="' + esc(e.id) + '"' + (p.linkType === 'event' && p.linkId === e.id ? ' selected' : '') + '>' + esc(fmtMD(e.start) + ' ' + e.title) + '</option>';
     }).join('');
+    var openPolls = S.polls.filter(function (x) { return x.open; });
+    var pollOpts = '<option value="">選擇調查</option>' + openPolls.map(function (x) {
+      return '<option value="' + esc(x.id) + '"' + (p.pollId === x.id ? ' selected' : '') + '>' + esc(x.title) + '</option>';
+    }).join('');
+    var linkPollOpts = '<option value="">選擇調查</option>' + openPolls.map(function (x) {
+      return '<option value="' + esc(x.id) + '"' + (p.linkType === 'poll' && p.linkId === x.id ? ' selected' : '') + '>' + esc(x.title) + '</option>';
+    }).join('');
     function radio(v, label, sub) {
       return '<label class="choice"><input type="radio" name="mode" value="' + v + '"' + (p.mode === v ? ' checked' : '') + '><span><b>' + label + '</b>' + (sub ? '<small>' + sub + '</small>' : '') + '</span></label>';
     }
@@ -982,22 +1061,31 @@
       radio('roles', '指定角色', '') + '<div class="choice-more" data-show="roles"><div class="chips">' + roleChips + '</div></div>' +
       radio('event', '活動報名者', '') + '<div class="choice-more" data-show="event"><select name="eventId" aria-label="活動">' + evOpts + '</select></div>' +
       radio('eventUnreplied', '活動未回覆者', '限會員以上的活動，提醒還沒回覆出席或請假的人') + '<div class="choice-more" data-show="eventUnreplied"><select name="eventId2" aria-label="活動">' + evOpts + '</select></div>' +
+      (openPolls.length ? radio('pollUnvoted', '調查未填寫者', '提醒還沒填寫調查的會員') + '<div class="choice-more" data-show="pollUnvoted"><select name="pollId" aria-label="調查">' + pollOpts + '</select></div>' : '') +
       radio('friends', '所有加入官方帳號的好友', '包含非會員，人數最多、額度用得最快') +
       '</div><p class="estimate" id="estimate" aria-live="polite">' + estimateHtml(p.preview) + '</p></section>';
     html += '<section class="step"><h2><span class="step-n">2</span>內容</h2>' +
       field('標題', '<input id="p-title" name="title" maxlength="60" required value="' + esc(p.title) + '" placeholder="例如：例會改地點通知">', '', 'p-title') +
       field('內容', '<textarea id="p-text" name="text" rows="5" maxlength="1000" required>' + esc(p.text) + '</textarea>', '<span id="p-count">' + p.text.length + '</span>／1000 字', 'p-text') +
       field('訊息按鈕', '<select id="p-link" name="linkType">' +
-        [['none', '不附按鈕'], ['home', '開啟會員專區'], ['event', '查看活動'], ['news', '閱讀消息'], ['url', '開啟網址']].map(function (o) {
+        [['none', '不附按鈕'], ['home', '開啟會員專區'], ['event', '查看活動'], ['news', '閱讀消息'], ['poll', '前往調查'], ['url', '開啟網址']].map(function (o) {
           return '<option value="' + o[0] + '"' + (p.linkType === o[0] ? ' selected' : '') + '>' + o[1] + '</option>';
         }).join('') + '</select>', '', 'p-link') +
       '<div class="choice-more" data-showlink="event"><select name="linkEvent" aria-label="連結的活動">' + linkEvOpts + '</select></div>' +
       '<div class="choice-more" data-showlink="news"><select name="linkNews" aria-label="連結的消息">' + newsOpts + '</select></div>' +
+      '<div class="choice-more" data-showlink="poll"><select name="linkPoll" aria-label="連結的調查">' + linkPollOpts + '</select></div>' +
       '<div class="choice-more" data-showlink="url"><input name="linkUrl" type="url" inputmode="url" placeholder="https://…" value="' + esc(p.linkUrl) + '" aria-label="網址"></div>' +
       '</section>';
+    var later = p.when === 'later';
     html += '<section class="step"><h2><span class="step-n">3</span>預覽與發送</h2><div id="lp">' + linePreview(p) + '</div>' +
-      '<button type="submit" class="btn btn-primary btn-block" id="p-send">' + icon('send') + '發送</button></section>';
+      '<div class="seg seg-reply" role="radiogroup" aria-label="發送時間">' +
+      '<label><input type="radio" name="when" value="now"' + (later ? '' : ' checked') + '><span>' + icon('send') + '立即發送</span></label>' +
+      '<label><input type="radio" name="when" value="later"' + (later ? ' checked' : '') + '><span>' + icon('clock') + '預約發送</span></label></div>' +
+      '<div data-when="later"' + (later ? '' : ' hidden') + '>' + field('發送時間', '<input id="p-at" type="datetime-local" name="sendAt" value="' + esc(p.sendAt || defaultSendAt()) + '">',
+        '到時間後 5 分鐘內送出，收件人以發送當下的名單為準；送出前都可以取消', 'p-at') + '</div>' +
+      '<button type="submit" class="btn btn-primary btn-block" id="p-send">' + icon(later ? 'clock' : 'send') + (later ? '預約發送' : '發送') + '</button></section>';
     html += '</form>';
+    html += scheduledSection();
 
     html += '<section class="block"><div class="block-head"><h2>最近發送紀錄</h2></div>';
     if (!log) html += skeleton(2);
@@ -1033,7 +1121,7 @@
     return txt;
   }
   function linePreview(p) {
-    var labels = { home: '開啟會員專區', event: '查看活動', news: '閱讀全文', url: '開啟連結' };
+    var labels = { home: '開啟會員專區', event: '查看活動', news: '閱讀全文', poll: '前往填寫', url: '開啟連結' };
     var btn = p.linkType !== 'none' ? '<div class="lp-foot"><span class="lp-btn">' + labels[p.linkType] + '</span></div>' : '';
     return '<div class="lp" aria-label="LINE 訊息預覽"><span class="lp-avatar">' + logo('') + '</span><div class="lp-bubble"><div class="lp-body">' +
       '<div class="lp-org">' + esc(CFG.ORG_NAME) + '</div><div class="lp-title">' + (esc(p.title) || '<span class="muted">（標題）</span>') + '</div>' +
@@ -1048,16 +1136,26 @@
     p.eventId = (p.mode === 'eventUnreplied' ? fd.get('eventId2') : fd.get('eventId')) || '';
     p.title = fd.get('title') || '';
     p.text = fd.get('text') || '';
+    p.pollId = fd.get('pollId') || '';
     p.linkType = fd.get('linkType') || 'none';
-    p.linkId = p.linkType === 'event' ? fd.get('linkEvent') : p.linkType === 'news' ? fd.get('linkNews') : '';
+    p.linkId = p.linkType === 'event' ? fd.get('linkEvent') : p.linkType === 'news' ? fd.get('linkNews') : p.linkType === 'poll' ? fd.get('linkPoll') : '';
     p.linkUrl = fd.get('linkUrl') || '';
+    p.when = fd.get('when') === 'later' ? 'later' : 'now';
+    p.sendAt = fd.get('sendAt') || '';
     form.querySelectorAll('[data-show]').forEach(function (el) { el.hidden = el.getAttribute('data-show') !== p.mode; });
     form.querySelectorAll('[data-showlink]').forEach(function (el) { el.hidden = el.getAttribute('data-showlink') !== p.linkType; });
+    form.querySelectorAll('[data-when]').forEach(function (el) { el.hidden = el.getAttribute('data-when') !== p.when; });
+    var sb = form.querySelector('#p-send');
+    if (sb && sb.getAttribute('data-when') !== p.when) {
+      sb.setAttribute('data-when', p.when);
+      sb.innerHTML = icon(p.when === 'later' ? 'clock' : 'send') + (p.when === 'later' ? '預約發送' : '發送');
+    }
   }
   function pushAudience() {
     var p = S.push;
     if (p.mode === 'roles') return { mode: 'roles', roles: p.roles };
     if (p.mode === 'event' || p.mode === 'eventUnreplied') return { mode: p.mode, eventId: p.eventId };
+    if (p.mode === 'pollUnvoted') return { mode: p.mode, pollId: p.pollId };
     return { mode: p.mode };
   }
   var previewTimer = null;
@@ -1066,8 +1164,8 @@
     var key = JSON.stringify(pushAudience());
     if (key === p.previewKey && p.preview) return;
     var est = document.getElementById('estimate');
-    if ((p.mode === 'roles' && !p.roles.length) || ((p.mode === 'event' || p.mode === 'eventUnreplied') && !p.eventId)) {
-      p.preview = Object.assign({}, p.preview || {}, { recipients: 0, error: p.mode === 'roles' ? '請至少選一個角色' : '請選擇活動' });
+    if ((p.mode === 'roles' && !p.roles.length) || ((p.mode === 'event' || p.mode === 'eventUnreplied') && !p.eventId) || (p.mode === 'pollUnvoted' && !p.pollId)) {
+      p.preview = Object.assign({}, p.preview || {}, { recipients: 0, error: p.mode === 'roles' ? '請至少選一個角色' : p.mode === 'pollUnvoted' ? '請選擇調查' : '請選擇活動' });
       p.previewKey = '';
       if (est) est.innerHTML = estimateHtml(p.preview);
       return;
@@ -1170,6 +1268,366 @@
     return html + '</main>';
   }
 
+  /* ═════════════ 畫面：活動月曆 ═════════════ */
+
+  function monthKey(t) { return t.y * 12 + (t.m - 1); }
+
+  function monthView() {
+    var today = tp(new Date().toISOString());
+    var key = S.calMonth || monthKey(today);
+    var y = Math.floor(key / 12), m = key % 12 + 1;
+    var first = Date.UTC(y, m - 1, 1);
+    var startW = new Date(first).getUTCDay();
+    var days = new Date(Date.UTC(y, m, 0)).getUTCDate();
+    var byDay = {}, cats = [], total = 0;
+    S.events.forEach(function (e) {
+      var t = tp(e.start);
+      if (!t || t.y !== y || t.m !== m) return;
+      (byDay[t.day] = byDay[t.day] || []).push(e);
+      if (cats.indexOf(e.category) < 0) cats.push(e.category);
+      total++;
+    });
+    var sel = S.calDay;
+    if (!sel || sel < first || sel >= first + days * 86400000) {
+      var withEv = Object.keys(byDay).map(Number).sort(function (a, b) { return a - b; });
+      var upcoming = withEv.filter(function (d) { return d >= today.day; });
+      sel = (today.y === y && today.m === m) ? today.day : (upcoming[0] || withEv[0] || first);
+    }
+    var cells = '';
+    for (var i = 0; i < startW; i++) cells += '<span class="cal-pad" aria-hidden="true"></span>';
+    for (var d = 1; d <= days; d++) {
+      var dayMs = Date.UTC(y, m - 1, d);
+      var w = (startW + d - 1) % 7;
+      var evs = byDay[dayMs] || [];
+      var cls = 'cal-day' + (w === 6 ? ' is-sat' : w === 0 ? ' is-sun' : '') + (dayMs === today.day ? ' is-today' : '') +
+        (dayMs === sel ? ' is-sel' : '') + (evs.length ? ' has-ev' : '');
+      var dots = evs.slice(0, 3).map(function (e) {
+        return '<i style="--c:' + esc(catColor(e.category)) + '"' + (e.status === '取消' ? ' class="is-x"' : '') + '></i>';
+      }).join('') + (evs.length > 3 ? '<em>+' + (evs.length - 3) + '</em>' : '');
+      cells += '<button type="button" class="' + cls + '" data-act="calDay" data-v="' + dayMs + '" aria-pressed="' + (dayMs === sel) + '" aria-label="' +
+        m + '月' + d + '日（' + WD[w] + '）' + (evs.length ? '，' + evs.length + ' 場活動' : '') + (dayMs === today.day ? '，今天' : '') + '"><b>' + d + '</b><span class="cal-dots">' + dots + '</span></button>';
+    }
+    var html = '<section class="cal" aria-label="活動月曆"><div class="cal-nav">' +
+      '<button type="button" class="iconbtn" data-act="calMonth" data-d="-1" aria-label="上個月">' + icon('back') + '</button>' +
+      '<h2 aria-live="polite">' + y + ' 年 ' + m + ' 月</h2>' +
+      '<button type="button" class="iconbtn" data-act="calMonth" data-d="1" aria-label="下個月">' + icon('next') + '</button></div>' +
+      '<div class="cal-week" aria-hidden="true">' + WD.map(function (x, i) {
+        return '<span' + (i === 6 ? ' class="is-sat"' : i === 0 ? ' class="is-sun"' : '') + '>' + x + '</span>';
+      }).join('') + '</div><div class="cal-grid">' + cells + '</div>' +
+      '<div class="cal-foot"><span>本月 ' + total + ' 場活動</span>' +
+      (key !== monthKey(today) ? '<button type="button" class="linkbtn" data-act="calMonth" data-d="0">回到本月</button>' : '') + '</div>' +
+      (cats.length ? '<div class="cal-legend">' + cats.map(catTag).join('') + '</div>' : '') + '</section>';
+    if (first + days * 86400000 < Date.now() - 120 * 86400000) html += '<p class="hint" style="margin-top:8px">月曆只顯示近 4 個月內與未來的活動。</p>';
+    var list = byDay[sel] || [];
+    var st = new Date(sel);
+    html += '<h3 class="month cal-sel-head' + weekendCls({ w: st.getUTCDay() }) + '">' + (st.getUTCMonth() + 1) + ' 月 ' + st.getUTCDate() + ' 日（' + WD[st.getUTCDay()] + '）' +
+      (sel === today.day ? '<small>今天</small>' : '') + '</h3>' +
+      (list.length ? '<div class="rows">' + list.map(eventRow).join('') + '</div>' : '<p class="muted cal-none">這天沒有活動。</p>');
+    return html;
+  }
+
+  /* ═════════════ 入會進度 ═════════════ */
+
+  function progressList(items, compact) {
+    return '<div class="prog-list">' + items.map(function (i) {
+      var pct = Math.min(100, Math.round(i.done / Math.max(1, i.need) * 100));
+      return '<div class="prog-item' + (i.ok ? ' is-ok' : '') + '"><div class="prog-row"><span>' + (i.ok ? icon('checkcircle') : '<i class="prog-dot" aria-hidden="true"></i>') +
+        '<b>' + esc(i.name) + '</b>' + (i.ok ? '<span class="sr">已完成</span>' : '') + '</span><span class="prog-n"><b>' + Math.min(i.done, i.need) + '</b>／' + i.need + '</span></div>' +
+        '<span class="capbar"><i style="width:' + pct + '%"></i></span>' +
+        (!compact && (i.desc || (i.categories && i.categories.length)) ? '<small>' + esc(i.desc || ('參加「' + i.categories.join('、') + '」')) + '</small>' : '') + '</div>';
+    }).join('') + '</div>';
+  }
+
+  function progressSection(me) {
+    var p = me.progress;
+    if (!p) return '';
+    return '<section class="block card prog-card"><div class="block-head"><h2>入會進度</h2><span class="pill' + (p.complete ? ' is-ok' : '') + '">' +
+      (p.complete ? '已全部完成' : '已完成 ' + p.okCount + '／' + p.items.length + ' 項') + '</span></div>' + progressList(p.items) +
+      (p.complete ? '<p class="banner is-ok">恭喜！你已達到入會門檻，請洽秘書處辦理正式入會。</p>'
+        : '<p class="hint" style="margin-top:12px">出席以活動現場掃碼報到或幹部點名為準。</p>') + '</section>';
+  }
+
+  function progressMini() {
+    var p = S.me && S.me.progress;
+    if (!p || p.complete) return '';
+    var pct = Math.round(p.okCount / p.items.length * 100);
+    return '<a class="prog-mini" href="#/me" data-tab="me"><div><b>入會進度</b><span>已完成 ' + p.okCount + '／' + p.items.length + ' 項條件</span></div>' +
+      '<span class="capbar" aria-hidden="true"><i style="width:' + pct + '%"></i></span>' + icon('next', 'chev') + '</a>';
+  }
+
+  function viewProspects() {
+    if (!perm('viewRegs')) return forbidden();
+    var d = ensure('prospects', function () { return Api.call('prospects'); });
+    var html = topbar({ back: 'me', title: '入會進度' }) + '<main class="view">';
+    if (!d) return html + skeleton(4) + '</main>';
+    if (d.__error) return html + errorBlock(d.__error) + '</main>';
+    if (!d.requirements.length) {
+      return html + empty('還沒有設定入會條件', '請在試算表的「入會條件」工作表填寫：適用角色、條件名稱、活動類別、次數。') + '</main>';
+    }
+    html += '<div class="card req-rules">' + d.requirements.map(function (r) {
+      return '<p><b>' + esc(r.role) + '</b>　' + r.items.map(function (i) { return esc(i.name) + ' ' + i.need + ' 次'; }).join('、') + '</p>';
+    }).join('') + '<p class="hint">條件在試算表的「入會條件」工作表修改。出席以掃碼報到或幹部點名為準。</p></div>';
+    if (!d.members.length) return html + empty('目前沒有需要追蹤的會員', '') + '</main>';
+    var list = d.members.slice().sort(function (a, b) {
+      return ((b.progress ? b.progress.okCount : 0) - (a.progress ? a.progress.okCount : 0)) || byName(a, b);
+    });
+    var done = list.filter(function (m) { return m.progress && m.progress.complete; }).length;
+    html += '<p class="summary">追蹤中 <b>' + list.length + '</b> 位，已達門檻 <b>' + done + '</b> 位</p>';
+    html += list.map(function (m) {
+      var p = m.progress;
+      return '<article class="card prospect"><div class="block-head"><div class="prospect-who"><b>' + esc(m.name) + '</b><span>' +
+        esc([m.role, m.company, m.joinYear ? m.joinYear + ' 年加入' : ''].filter(Boolean).join('　')) + '</span></div>' +
+        (p ? '<span class="pill' + (p.complete ? ' is-ok' : '') + '">' + (p.complete ? '已達門檻' : p.okCount + '／' + p.items.length) + '</span>' : '') + '</div>' +
+        (p ? progressList(p.items, true) : '') + '</article>';
+    }).join('');
+    return html + '</main>';
+  }
+
+  /* ═════════════ 歷屆幹部、年度交接 ═════════════ */
+
+  function officerList(items) {
+    return '<ul class="officers">' + items.map(function (o) {
+      return '<li><span class="off-title">' + esc(o.title) + '</span><b>' + esc(o.name) + '</b></li>';
+    }).join('') + '</ul>';
+  }
+
+  function viewOfficers() {
+    if (!perm('directory')) return forbidden();
+    var d = ensure('officers', function () { return Api.call('officers'); });
+    var tool = perm('memberManage') ? '<button type="button" class="btn btn-small btn-ghost" data-go="admin/handover">年度交接</button>' : '';
+    var html = topbar({ back: 'directory', title: '歷屆幹部', actions: tool }) + '<main class="view">';
+    if (!d) return html + skeleton(5) + '</main>';
+    if (d.__error) return html + errorBlock(d.__error) + '</main>';
+    html += '<h3 class="month">本屆幹部<small>' + d.current.length + ' 位</small></h3>' +
+      (d.current.length ? officerList(d.current) : '<p class="muted">會員名冊還沒有填職稱。</p>');
+    d.terms.forEach(function (t) {
+      html += '<h3 class="month">' + esc(t.term) + (/^\d{4}$/.test(t.term) ? ' 年度' : '') + '<small>' + t.list.length + ' 位</small></h3>' + officerList(t.list);
+    });
+    if (!d.terms.length) html += '<p class="hint" style="margin-top:14px">每年交接時把卸任幹部存檔，這裡就會留下歷屆名單。</p>';
+    return html + '</main>';
+  }
+
+  function roleNameSet() {
+    var o = {};
+    S.roles.forEach(function (r) { o[r.role] = 1; });
+    return o;
+  }
+
+  function viewHandover() {
+    if (!perm('memberManage')) return forbidden();
+    var list = ensure('members', function () { return Api.call('members'); });
+    var html = topbar({ back: 'me', title: '年度交接' }) + '<main class="view">';
+    if (!list) return html + skeleton(6) + '</main>';
+    if (list.__error) return html + errorBlock(list.__error) + '</main>';
+    var names = roleNameSet();
+    var active = list.filter(function (m) { return m.status !== '停用'; }).slice().sort(byLevelThenName);
+    var officers = active.filter(function (m) { return m.title && !names[m.title]; });
+    var now = new Date();
+    var term = now.getMonth() >= 6 ? now.getFullYear() : now.getFullYear() - 1;
+    var myId = S.me.member && S.me.member.id;
+    var allowed = S.roles.filter(function (r) { return r.level > 0 && r.level <= S.me.level; }).slice().reverse();
+    function roleOpts(cur) {
+      var opts = allowed.slice();
+      if (!opts.some(function (r) { return r.role === cur; })) opts.unshift({ role: cur || '' });
+      return opts.map(function (r) { return '<option' + (r.role === cur ? ' selected' : '') + '>' + esc(r.role) + '</option>'; }).join('');
+    }
+    html += '<p class="summary">新年度開始前做一次：先把卸任幹部存進「歷屆幹部」，再一次更新新年度的角色與職稱。</p>';
+    html += '<form class="form" data-form="handover" novalidate>';
+    html += '<section class="step"><h2><span class="step-n">1</span>存檔卸任幹部</h2>' +
+      field('卸任年度', '<input id="h-term" name="term" maxlength="20" required value="' + term + '">', '同一年度重複存檔會覆蓋原本的紀錄，不會重複', 'h-term') +
+      (officers.length ? '<div class="choices">' + officers.map(function (m) {
+        return '<label class="choice"><input type="checkbox" name="archive" value="' + esc(m.id) + '" checked><span><b>' + esc(m.title) + '　' + esc(m.name) + '</b><small>' + esc(m.role) + '</small></span></label>';
+      }).join('') + '</div>' : '<p class="muted">名冊上目前沒有人填職稱。</p>') + '</section>';
+    html += '<section class="step"><h2><span class="step-n">2</span>新年度職務</h2>' +
+      '<p class="hint">直接修改角色與職稱，沒改的人不會變動；職稱留空代表沒有職務。你自己的角色不能在這裡修改。</p>' +
+      (officers.length ? '<div class="ho-tools"><button type="button" class="btn btn-ghost btn-small" data-act="hoClear">清空上面勾選幹部的職稱</button></div>' : '') +
+      '<div class="search">' + icon('search') + '<input type="search" data-filter="ho" placeholder="搜尋姓名" aria-label="搜尋會員"></div>' +
+      '<div class="ho-list">' + active.map(function (m) {
+        var locked = m.level > S.me.level;
+        return '<div class="ho-row" data-ho="' + esc(m.id) + '" data-name="' + esc(m.name) + '"><div class="ho-who"><b>' + esc(m.name) + '</b><span>' +
+          esc(m.role + (m.title ? '　' + m.title : '')) + '</span></div><div class="ho-inputs">' +
+          '<select name="role:' + esc(m.id) + '" aria-label="' + esc(m.name) + ' 的角色"' + (m.id === myId || locked ? ' disabled' : '') + '>' + roleOpts(m.role) + '</select>' +
+          '<input name="title:' + esc(m.id) + '" maxlength="40" value="' + esc(m.title) + '" placeholder="職稱" aria-label="' + esc(m.name) + ' 的職稱"' + (locked ? ' disabled' : '') + '></div></div>';
+      }).join('') + '</div></section>';
+    html += '<section class="step"><h2><span class="step-n">3</span>完成交接</h2><p class="estimate" id="ho-summary" aria-live="polite"></p>' +
+      '<button type="submit" class="btn btn-primary btn-block">完成交接</button></section></form>';
+    return html + '</main>';
+  }
+
+  /** 讀交接表單，算出存檔名單與有變動的會員 */
+  function readHandover(form) {
+    var fd = new FormData(form);
+    var list = Array.isArray(S.cache.members) ? S.cache.members : [];
+    var changes = [];
+    list.forEach(function (m) {
+      var r = fd.get('role:' + m.id), t = fd.get('title:' + m.id);
+      var c = { id: m.id }, any = false;
+      if (r !== null && r !== m.role) { c.role = r; any = true; }
+      if (t !== null && String(t).trim() !== (m.title || '')) { c.title = String(t).trim(); any = true; }
+      var row = form.querySelector('[data-ho="' + m.id + '"]');
+      if (row) row.classList.toggle('is-changed', any);
+      if (any) changes.push(c);
+    });
+    return { term: String(fd.get('term') || '').trim(), archive: fd.getAll('archive'), changes: changes };
+  }
+  function hoSummary(form) {
+    var h = readHandover(form);
+    var el = document.getElementById('ho-summary');
+    if (el) el.innerHTML = '存檔 <b>' + h.archive.length + '</b> 位卸任幹部、更新 <b>' + h.changes.length + '</b> 位會員';
+  }
+
+  /* ═════════════ 畫面：調查 ═════════════ */
+
+  function pollState(p) {
+    if (!p.open) return '<span class="pill is-muted">已結束</span>';
+    if (p.myChoices) return '<span class="pill is-ok">已回覆</span>';
+    return '<span class="pill is-alert">尚未回覆</span>';
+  }
+  function pollRow(p) {
+    return '<a class="nrow poll-row" href="#/poll/' + encodeURIComponent(p.id) + '" data-nav><div class="nrow-top">' + icon('vote', 'poll-ic') +
+      '<span>' + (p.multi ? '可複選' : '單選') + '</span><time>' + (p.deadline ? (p.open ? '截止 ' + fmtMD(p.deadline) : fmtDate(p.deadline) + ' 結束') : (p.open ? '' : '已結束')) + '</time></div>' +
+      '<div class="nrow-title">' + esc(p.title) + '</div><div class="erow-state">' + pollState(p) + '<span class="poll-voters">' + p.voters + ' 人回覆</span></div></a>';
+  }
+  function upsertPoll(p) {
+    var lite = Object.assign({}, p, { options: p.options.map(function (o) { return { text: o.text, count: o.count }; }) });
+    delete lite.unvoted;
+    var i = S.polls.findIndex(function (x) { return x.id === p.id; });
+    if (i >= 0) S.polls[i] = lite; else S.polls.unshift(lite);
+  }
+
+  function viewPolls() {
+    var add = perm('newsManage') ? '<button type="button" class="btn btn-small" data-go="poll-edit/new">' + icon('plus') + '新增調查</button>' : '';
+    var html = topbar({ back: 'home', title: '調查', actions: add }) + '<main class="view">';
+    if (!S.me.member) return html + empty('調查只開放給會員', '完成會員綁定後就能參加。', '<button type="button" class="btn btn-ghost" data-tab="me">前往綁定</button>') + '</main>';
+    var open = S.polls.filter(function (p) { return p.open; }), closed = S.polls.filter(function (p) { return !p.open; });
+    if (!S.polls.length) return html + empty('目前沒有調查', perm('newsManage') ? '聚餐日期、地點、會服尺寸，都可以開一份調查，大家勾選後自動統計。' : '') + '</main>';
+    if (open.length) html += '<h3 class="month">進行中<small>' + open.length + ' 份</small></h3><div class="rows">' + open.map(pollRow).join('') + '</div>';
+    if (closed.length) html += '<h3 class="month">已結束</h3><div class="rows">' + closed.map(pollRow).join('') + '</div>';
+    return html + '</main>';
+  }
+
+  function viewPoll(r) {
+    var id = r.a;
+    var d = ensure('poll:' + id, function () { return Api.call('poll', { id: id }); });
+    var html = topbar({ back: 'polls', title: '調查' }) + '<main class="view view-detail">';
+    if (!d) return html + skeleton(4) + '</main>';
+    if (d.__error) return html + errorBlock(d.__error) + '</main>';
+    var p = d, mine = p.myChoices || [];
+    var top = Math.max.apply(null, p.options.map(function (o) { return o.count; }).concat([0]));
+    html += '<div class="detail-head"><span class="cat" style="--c:#0E8C8C">調查</span><h1>' + esc(p.title) + '</h1>' +
+      '<p class="byline">' + (p.multi ? '可複選' : '單選') + '　' + (p.deadline ? (p.open ? '截止 ' : '已於 ') + esc(fmtDT(p.deadline)) + (p.open ? '' : ' 截止') : (p.open ? '沒有截止時間' : '已結束')) +
+      '　' + p.voters + ' 人回覆</p></div>' + (p.description ? '<div class="prose">' + richText(p.description) + '</div>' : '');
+    html += '<form class="form" data-form="vote" novalidate><input type="hidden" name="pollId" value="' + esc(p.id) + '"><div class="poll-opts" role="group" aria-label="選項">' +
+      p.options.map(function (o, i) {
+        var pct = p.voters ? Math.round(o.count / p.voters * 100) : 0;
+        return '<label class="popt' + (mine.indexOf(i) >= 0 ? ' is-mine' : '') + (o.count && o.count === top ? ' is-lead' : '') + '">' +
+          '<input type="' + (p.multi ? 'checkbox' : 'radio') + '" name="choice" value="' + i + '"' + (mine.indexOf(i) >= 0 ? ' checked' : '') + (p.open ? '' : ' disabled') + '>' +
+          '<span class="popt-body"><span class="popt-top"><b>' + esc(o.text) + '</b><span class="popt-n">' + o.count + ' 票</span></span>' +
+          '<span class="capbar"><i style="width:' + pct + '%"></i></span>' +
+          (o.names && o.names.length ? '<span class="popt-names">' + o.names.map(esc).join('、') + '</span>' : '') + '</span></label>';
+      }).join('') + '</div>' +
+      (p.open ? '<button type="submit" class="btn btn-primary btn-block">' + (p.myChoices ? '更新我的選擇' : '送出') + '</button>'
+        : '<div class="banner is-muted">調查已結束，以上是最後結果。</div>') + '</form>';
+    if (perm('newsManage')) {
+      html += '<section class="manage" style="margin-top:22px"><h2>管理這份調查</h2><div class="manage-actions">' +
+        '<button type="button" class="btn btn-ghost" data-go="poll-edit/' + esc(p.id) + '">' + icon('edit') + '編輯</button>' +
+        '<button type="button" class="btn btn-ghost" data-act="pollStatus" data-id="' + esc(p.id) + '" data-open="' + (p.open ? '0' : '1') + '">' + (p.open ? '提前結束' : '重新開放') + '</button>' +
+        (canPush() && p.open ? '<button type="button" class="btn btn-ghost" data-act="pushFor" data-type="poll" data-id="' + esc(p.id) + '">' + icon('send') + '提醒未填寫者</button>' : '') +
+        '<button type="button" class="btn btn-ghost" data-act="copyPoll" data-id="' + esc(p.id) + '">' + icon('copy') + '複製結果</button>' +
+        '<button type="button" class="btn btn-ghost is-danger" data-act="deletePoll" data-id="' + esc(p.id) + '">' + icon('trash') + '刪除</button></div></section>';
+    }
+    if (p.unvoted) {
+      html += '<section class="reglist"><h3 class="sub-head">尚未填寫（' + p.unvoted.length + '）</h3>' + (p.unvoted.length ? '<p class="names">' + p.unvoted.map(function (u) {
+        return '<span' + (u.bound ? '' : ' class="is-unbound" title="尚未綁定 LINE"') + '>' + esc(u.name) + '</span>';
+      }).join('') + '</p>' : '<p class="muted">大家都填好了。</p>') + '</section>';
+    }
+    return html + '</main>';
+  }
+
+  function viewPollEdit(r) {
+    if (!perm('newsManage')) return forbidden();
+    var isNew = r.a === 'new';
+    var p = isNew ? { multi: true, audience: '', options: [], voters: 0 } : (S.cache['poll:' + r.a] || S.polls.filter(function (x) { return x.id === r.a; })[0]);
+    if (!p || p.__error) return topbar({ back: 'polls', title: '編輯調查' }) + '<main class="view">' + empty('找不到這份調查', '') + '</main>';
+    var levels = S.roles.filter(function (x) { return x.level > 0 && x.level <= S.me.level; });
+    var audOpts = '<option value="">全體會員</option>' + levels.slice(1).map(function (x) {
+      return '<option value="' + esc(x.role) + '"' + (x.role === p.audience ? ' selected' : '') + '>' + esc(x.role) + '以上</option>';
+    }).join('');
+    return topbar({ back: isNew ? 'polls' : 'poll/' + p.id, title: isNew ? '新增調查' : '編輯調查' }) +
+      '<main class="view"><form class="form" data-form="poll" novalidate><input type="hidden" name="id" value="' + esc(p.id || '') + '">' +
+      field('標題', '<input id="v-title" name="title" required maxlength="60" value="' + esc(p.title || '') + '" placeholder="例如：十二月聯誼晚會日期">', '', 'v-title') +
+      field('說明（選填）', '<textarea id="v-desc" name="description" rows="3" maxlength="500" placeholder="例如：請勾選可以出席的日期，票數最多的日期會在理監事會確認">' + esc(p.description || '') + '</textarea>', '', 'v-desc') +
+      field('選項', '<textarea id="v-opts" name="options" rows="5" required placeholder="12/5（六）晚上&#10;12/12（六）晚上&#10;12/19（六）晚上">' + esc(p.options.map(function (o) { return o.text; }).join('\n')) + '</textarea>',
+        '一行一個選項，2 到 20 個' + (p.voters ? '。<b class="is-danger-text">已經有 ' + p.voters + ' 人回覆，改動選項文字後，原本選這個選項的回覆就不再計算。</b>' : ''), 'v-opts') +
+      '<label class="check"><input type="checkbox" name="multi"' + (p.multi ? ' checked' : '') + '><span>可複選<small>時間調查建議打勾，讓大家勾選所有可以的時段</small></span></label>' +
+      '<div class="field-row">' + field('誰可以填', '<select id="v-aud" name="audience">' + audOpts + '</select>', '', 'v-aud') +
+      field('截止時間（選填）', '<input id="v-dl" type="datetime-local" name="deadline" value="' + toInput(p.deadline) + '">', '', 'v-dl') + '</div>' +
+      (canPush() && isNew ? '<label class="check"><input type="checkbox" name="notify"><span>建立後用 LINE 通知可以填的會員<small>每位收件人用掉 1 則訊息額度</small></span></label>' : '') +
+      '<div class="form-actions"><button type="submit" class="btn btn-primary btn-block">' + (isNew ? '建立調查' : '儲存變更') + '</button></div></form></main>';
+  }
+
+  /* ═════════════ 會友商家 ═════════════ */
+
+  function mapSearchUrl(addr) {
+    return 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(addr);
+  }
+
+  function shopCard(m) {
+    var s = m.shop;
+    return '<article class="card shop"><h3>' + esc(s.name) + '</h3><p class="shop-owner">' + esc(m.name) + (m.title ? '　' + esc(m.title) : '') + (m.industry ? '　·　' + esc(m.industry) : '') + '</p>' +
+      (s.offer ? '<p class="shop-offer">' + icon('gift') + '<b>會友優惠</b><span>' + esc(s.offer) + '</span></p>' : '') +
+      (s.intro ? '<p class="shop-intro">' + esc(s.intro) + '</p>' : '') +
+      (s.address || s.hours ? '<dl class="shop-info">' + (s.address ? '<div>' + icon('pin') + '<dd>' + esc(s.address) + '</dd></div>' : '') +
+        (s.hours ? '<div>' + icon('clock') + '<dd>' + esc(s.hours) + '</dd></div>' : '') + '</dl>' : '') +
+      '<div class="shop-actions">' + (s.address ? '<a class="btn btn-ghost btn-small" href="' + esc(mapSearchUrl(s.address)) + '" data-ext>' + icon('map') + '地圖</a>' : '') +
+      (m.phone ? '<a class="btn btn-ghost btn-small" href="tel:' + esc(m.phone) + '">' + icon('phone') + '電話</a>' : '') +
+      (s.url ? '<a class="btn btn-ghost btn-small" href="' + esc(s.url) + '" data-ext>' + icon('link') + '網站</a>' : '') + '</div></article>';
+  }
+
+  function shopList(list) {
+    var q = S.dirQuery.trim().toLowerCase();
+    var all = list.filter(function (m) { return m.shop; });
+    list = all;
+    if (S.dirIndustry) list = list.filter(function (m) { return m.industry === S.dirIndustry; });
+    if (q) list = list.filter(function (m) {
+      var s = m.shop;
+      return (s.name + s.intro + s.address + s.offer + m.name + (m.industry || '')).toLowerCase().indexOf(q) >= 0;
+    });
+    if (!all.length) return empty('還沒有會友登錄商家', '到「我的」頁登錄自己的店，會友聚餐、送禮就會想到你。', '<button type="button" class="btn btn-ghost" data-tab="me">登錄我的商家</button>');
+    if (!list.length) return empty('找不到符合的商家', '換個關鍵字或行業試試。');
+    list = list.slice().sort(function (a, b) { return byName({ name: a.shop.name }, { name: b.shop.name }); });
+    return '<div class="shops">' + list.map(shopCard).join('') + '</div>';
+  }
+
+  function shopSection(me) {
+    var s = me.member.shop;
+    var html = '<section class="block card shop-me"><div class="block-head"><h2>我的商家</h2>' +
+      '<button type="button" class="linkbtn" data-act="editShop">' + icon(s ? 'edit' : 'plus') + (s ? '編輯' : '登錄') + '</button></div>';
+    if (!s) return html + '<p class="muted">登錄你的店家或公司，會友在通訊錄的「會友商家」就找得到你，也可以提供會友優惠。</p></section>';
+    return html + '<p class="shop-me-name"><b>' + esc(s.name) + '</b>' + (s.address ? '<span>' + esc(s.address) + '</span>' : '') + '</p>' +
+      (s.offer ? '<p class="shop-offer">' + icon('gift') + '<b>會友優惠</b><span>' + esc(s.offer) + '</span></p>' : '') + '</section>';
+  }
+
+  /* ═════════════ 預約推播 ═════════════ */
+
+  function defaultSendAt() {
+    var t = tp(new Date(Date.now() + 86400000).toISOString());
+    return t.y + '-' + pad(t.m) + '-' + pad(t.d) + 'T09:00';
+  }
+
+  function scheduledSection() {
+    var d = ensure('scheduled', function () { return Api.call('scheduledPushes'); });
+    if (!d || d.__error) return '';
+    var failed = d.done.filter(function (x) { return x.status === '失敗'; }).slice(0, 3);
+    if (!d.pending.length && !failed.length) return '';
+    return '<section class="block"><div class="block-head"><h2>預約中的通知</h2></div><ol class="log">' + d.pending.map(function (x) {
+      return '<li><div><b>' + esc(x.title) + '</b><span>' + esc(x.audienceLabel) + '　' + esc(x.createdBy) + ' 預約</span></div>' +
+        '<div class="log-side"><time>' + fmtDT(x.sendAt) + '</time><button type="button" class="linkbtn is-danger" data-act="cancelScheduled" data-id="' + esc(x.id) + '">取消預約</button></div></li>';
+    }).join('') + failed.map(function (x) {
+      return '<li><div><b>' + esc(x.title) + '</b><span>' + esc(x.result) + '</span></div><div class="log-side"><time>' + fmtDT(x.sendAt) + '</time><span class="pill is-danger">預約發送失敗</span></div></li>';
+    }).join('') + '</ol>' + (d.pending.length ? '<p class="hint" style="margin-top:8px">預約的通知會在設定時間後 5 分鐘內送出，收件人以發送當下的名單為準。</p>' : '') + '</section>';
+  }
+
   /* ═════════════ 主要 render ═════════════ */
 
   var VIEWS = {
@@ -1177,11 +1635,14 @@
     news: function (r) { return r.a ? viewNewsItem(r) : viewNews(); },
     'news-edit': viewNewsEdit, directory: viewDirectory, me: viewMe, checkin: viewCheckin,
     docs: viewDocs, 'doc-edit': viewDocEdit,
+    polls: viewPolls, poll: viewPoll, 'poll-edit': viewPollEdit, officers: viewOfficers,
     admin: function (r) {
       if (r.a === 'push') return viewPush();
       if (r.a === 'members') return viewMembers();
       if (r.a === 'requests') return viewRequests();
       if (r.a === 'attendance') return viewAttendance();
+      if (r.a === 'prospects') return viewProspects();
+      if (r.a === 'handover') return viewHandover();
       return viewMe();
     }
   };
@@ -1215,6 +1676,8 @@
     }
     var pf = $app.querySelector('form[data-form="push"]');
     if (pf) { readPushForm(pf); refreshPushPreview(); }
+    var hf = $app.querySelector('form[data-form="handover"]');
+    if (hf) hoSummary(hf);
   }
 
   function renderTabbar(r, isRoot) {
@@ -1564,7 +2027,7 @@
         field('備註', '<textarea id="r-note" name="note" rows="2" maxlength="200" placeholder="例如：吃素、攜伴姓名">' + esc(ev.myReg && !wasLeave ? ev.myReg.note : '') + '</textarea>', '', 'r-note') + '</div>';
       var leaveFields = '<div data-reply="請假"' + (mode !== 'leave' ? ' hidden' : '') + '>' +
         field('請假原因（選填）', '<textarea id="r-reason" name="reason" rows="2" maxlength="200" placeholder="例如：出差、家裡有事">' + esc(wasLeave ? ev.myReg.note : '') + '</textarea>', '會顯示給幹部，不會公開', 'r-reason') + '</div>';
-      openSheet('<h2 class="sheet-title">' + (ev.myReg ? '修改回覆' : ev.category === '理監事會' ? '回覆出席' : '報名') + '<small>' + esc(ev.title) + '</small></h2>' +
+      openSheet('<h2 class="sheet-title">' + (ev.myReg ? '修改回覆' : (ev.category === '理監事會' || ev.category === '籌備會') ? '回覆出席' : '報名') + '<small>' + esc(ev.title) + '</small></h2>' +
         '<form class="form" data-form="register" novalidate><input type="hidden" name="eventId" value="' + esc(ev.id) + '">' + who + seg + attendFields + leaveFields +
         '<div class="form-actions"><button type="submit" class="btn btn-primary btn-block">' + (mode === 'leave' ? '送出請假' : ev.myReg ? '更新報名' : '確認報名') + '</button></div></form>', '報名');
     },
@@ -1713,6 +2176,10 @@
         Object.assign(S.push, { mode: type === 'unreplied' ? 'eventUnreplied' : 'event', eventId: id, linkType: 'event', linkId: id,
           title: ev ? (type === 'unreplied' ? '請回覆：' + ev.title : ev.title + ' 通知') : '',
           text: ev && type === 'unreplied' ? fmtWhen(ev.start, ev.end) + (ev.location ? ' ' + ev.location : '') + '\n請到會員專區回覆出席或請假，謝謝。' : '' });
+      } else if (type === 'poll') {
+        var pl = S.cache['poll:' + id] || S.polls.filter(function (x) { return x.id === id; })[0];
+        Object.assign(S.push, { mode: 'pollUnvoted', pollId: id, linkType: 'poll', linkId: id,
+          title: pl ? '請填寫：' + pl.title : '', text: (pl && pl.deadline ? '請在 ' + fmtDT(pl.deadline) + ' 前' : '請') + '到會員專區填寫，謝謝。' });
       } else {
         var n = S.news.filter(function (x) { return x.id === id; })[0];
         Object.assign(S.push, { mode: 'all', linkType: 'news', linkId: id, title: n ? n.title : '', text: n ? excerpt(n.content, 120) : '' });
@@ -1733,6 +2200,113 @@
           return Api.call('unbindMember', { id: id }).then(function (m) {
             replaceMember(m);
             toast('已解除綁定');
+          });
+        }).catch(fail);
+      }, 240);
+    },
+    evView: function (el) {
+      S.evView = el.getAttribute('data-v') === 'month' ? 'month' : 'list';
+      pref('jci.evView', S.evView);
+      render();
+    },
+    calMonth: function (el) {
+      var d = Number(el.getAttribute('data-d'));
+      var key = S.calMonth || monthKey(tp(new Date().toISOString()));
+      S.calMonth = d === 0 ? 0 : key + d;
+      S.calDay = 0;
+      render();
+    },
+    calDay: function (el) {
+      S.calDay = Number(el.getAttribute('data-v'));
+      render();
+      var h = document.querySelector('.cal-sel-head');
+      if (h && h.getBoundingClientRect().top > window.innerHeight - 140) h.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    },
+    dirTab: function (el) {
+      S.dirTab = el.getAttribute('data-v') === 'shops' ? 'shops' : 'people';
+      if (el.hasAttribute('data-q')) { S.dirQuery = el.getAttribute('data-q'); S.dirIndustry = ''; }
+      render();
+    },
+    hoClear: function (el) {
+      var form = el.closest('form');
+      form.querySelectorAll('input[name="archive"]:checked').forEach(function (cb) {
+        var t = form.querySelector('input[name="title:' + cb.value + '"]');
+        if (t && !t.disabled) t.value = '';
+      });
+      hoSummary(form);
+      toast('已清空，請填上新年度的職稱');
+    },
+    pollStatus: function (el) {
+      var id = el.getAttribute('data-id'), open = el.getAttribute('data-open') === '1';
+      var go2 = function () {
+        return busy(el, Api.call('setPollStatus', { id: id, open: open })).then(function (p) {
+          S.cache['poll:' + id] = p;
+          upsertPoll(p);
+          render();
+          toast(open ? '調查已重新開放' : '調查已結束');
+        });
+      };
+      if (open) { go2().catch(fail); return; }
+      confirmSheet({ title: '提前結束這份調查？', body: '結束後大家就不能再填寫或修改，之後可以重新開放。', ok: '結束調查' })
+        .then(function (fd) { if (fd) return go2(); }).catch(fail);
+    },
+    deletePoll: function (el) {
+      var id = el.getAttribute('data-id');
+      confirmSheet({ title: '刪除這份調查？', body: '調查與所有回覆都會刪除，無法復原。', ok: '刪除', danger: true }).then(function (fd) {
+        if (!fd) return;
+        return Api.call('deletePoll', { id: id }).then(function () {
+          S.polls = S.polls.filter(function (x) { return x.id !== id; });
+          delete S.cache['poll:' + id];
+          go('polls', true);
+          toast('調查已刪除');
+        });
+      }).catch(fail);
+    },
+    copyPoll: function (el) {
+      var p = S.cache['poll:' + el.getAttribute('data-id')];
+      if (!p || !p.options) return;
+      var lines = [p.title + '（' + p.voters + ' 人回覆）'];
+      p.options.forEach(function (o) { lines.push(o.text + '：' + o.count + ' 票' + (o.names && o.names.length ? '（' + o.names.join('、') + '）' : '')); });
+      if (p.unvoted && p.unvoted.length) lines.push('尚未填寫：' + p.unvoted.map(function (u) { return u.name; }).join('、'));
+      copyText(lines.join('\n'));
+    },
+    cancelScheduled: function (el) {
+      var id = el.getAttribute('data-id');
+      confirmSheet({ title: '取消這則預約？', body: '取消後不會發送，需要的話可以重新預約。', ok: '取消預約', cancel: '保留', danger: true }).then(function (fd) {
+        if (!fd) return;
+        return Api.call('cancelScheduledPush', { id: id }).then(function (res) {
+          S.cache.scheduled = res;
+          render();
+          toast('已取消預約');
+        });
+      }).catch(fail);
+    },
+    editShop: function () {
+      var m = S.me.member;
+      if (!m) return;
+      var s = m.shop || {};
+      openSheet('<h2 class="sheet-title">' + (m.shop ? '編輯我的商家' : '登錄我的商家') + '<small>會友在通訊錄的「會友商家」看得到</small></h2>' +
+        '<form class="form" data-form="shop" novalidate>' +
+        field('商家名稱', '<input id="s-name" name="name" maxlength="40" required value="' + esc(s.name || '') + '" placeholder="例如：蓁好烘焙坊">', '', 's-name') +
+        field('介紹', '<textarea id="s-intro" name="intro" rows="3" maxlength="500" placeholder="賣什麼、有什麼特色">' + esc(s.intro || '') + '</textarea>', '', 's-intro') +
+        field('會友優惠（選填）', '<input id="s-offer" name="offer" maxlength="100" value="' + esc(s.offer || '') + '" placeholder="例如：出示會員證 9 折">', '', 's-offer') +
+        field('地址（選填）', '<input id="s-addr" name="address" maxlength="100" value="' + esc(s.address || '') + '" autocomplete="street-address">', '會顯示「地圖」按鈕', 's-addr') +
+        field('營業時間（選填）', '<input id="s-hours" name="hours" maxlength="60" value="' + esc(s.hours || '') + '" placeholder="例如：週二至週日 10:00–20:00">', '', 's-hours') +
+        field('網站或粉絲專頁（選填）', '<input id="s-url" name="url" type="url" inputmode="url" maxlength="300" value="' + esc(s.url || '') + '" placeholder="https://…">', '', 's-url') +
+        '<p class="hint">電話會依你在「我的資料」的同意設定顯示。</p>' +
+        '<div class="form-actions"><button type="submit" class="btn btn-primary btn-block">儲存</button></div>' +
+        (m.shop ? '<button type="button" class="btn btn-ghost is-danger btn-block" data-act="removeShop">移除我的商家</button>' : '') + '</form>', '我的商家');
+    },
+    removeShop: function () {
+      closeSheet();
+      setTimeout(function () {
+        confirmSheet({ title: '移除我的商家？', body: '會友商家列表就不會再顯示你的店。', ok: '移除', danger: true }).then(function (fd) {
+          if (!fd) return;
+          return Api.call('updateShop', { name: '' }).then(function (me) {
+            S.me = me;
+            delete S.cache.directory;
+            render();
+            toast('已移除');
           });
         }).catch(fail);
       }, 240);
@@ -1885,13 +2459,34 @@
       var p = S.push;
       if (p.mode === 'roles' && !p.roles.length) { toast('請至少選一個角色', 'error'); return; }
       if ((p.mode === 'event' || p.mode === 'eventUnreplied') && !p.eventId) { toast('請選擇活動', 'error'); return; }
+      if (p.mode === 'pollUnvoted' && !p.pollId) { toast('請選擇調查', 'error'); return; }
       if (!p.title.trim()) { toast('請填寫標題', 'error'); form.title.focus(); return; }
       if (!p.text.trim()) { toast('請填寫內容', 'error'); form.text.focus(); return; }
-      if ((p.linkType === 'event' || p.linkType === 'news') && !p.linkId) { toast('請選擇按鈕要連到哪裡', 'error'); return; }
+      if ((p.linkType === 'event' || p.linkType === 'news' || p.linkType === 'poll') && !p.linkId) { toast('請選擇按鈕要連到哪裡', 'error'); return; }
       if (p.linkType === 'url' && !/^https:\/\//.test(p.linkUrl)) { toast('網址需以 https:// 開頭', 'error'); return; }
       var pv = p.preview || {};
       var n = pv.recipients;
       var who = pv.label || '';
+      if (p.when === 'later') {
+        var at = fromInput(p.sendAt);
+        if (!at) { toast('請選擇發送時間', 'error'); return; }
+        if (Date.parse(at) < Date.now() + 2 * 60000) { toast('預約時間請設定在至少 2 分鐘之後', 'error'); return; }
+        confirmSheet({
+          title: '預約發送？',
+          body: '將在 <b>' + esc(fmtDT(at)) + '</b> 發送給' + esc(who || '指定對象') + '。<br>實際收件人以發送當下的名單為準，送出前都可以取消。',
+          ok: '預約'
+        }).then(function (fd) {
+          if (!fd) return;
+          var link = { type: p.linkType, id: p.linkId, url: p.linkUrl };
+          return busy(btn, Api.call('schedulePush', { audience: pushAudience(), title: p.title, text: p.text, link: link, sendAt: at })).then(function (res) {
+            toast('已預約 ' + fmtDT(at) + ' 發送');
+            S.push = pushDefaults();
+            S.cache.scheduled = res.list;
+            render();
+          });
+        }).catch(fail);
+        return;
+      }
       confirmSheet({
         title: '確定發送？',
         body: esc(who) + (n !== null && n !== undefined ? '，預計 <b>' + n + '</b> 人' : '') + '。<br>LINE 訊息送出後無法收回。',
@@ -1954,6 +2549,67 @@
         S.docs = res.docs || S.docs;
         go('docs', true);
         toast(d.id ? '文件已更新' : '文件已新增');
+      }).catch(fail);
+    },
+    handover: function (form, btn) {
+      var h = readHandover(form);
+      if (!h.term) { toast('請填寫卸任年度', 'error'); form.term.focus(); return; }
+      if (!h.archive.length && !h.changes.length) { toast('沒有要存檔或變更的資料', 'error'); return; }
+      confirmSheet({
+        title: '完成年度交接？',
+        body: (h.archive.length ? '把 <b>' + h.archive.length + '</b> 位卸任幹部存進「' + esc(h.term) + '」年度的歷屆幹部。<br>' : '') +
+          (h.changes.length ? '更新 <b>' + h.changes.length + '</b> 位會員的角色或職稱。' : '沒有會員的角色或職稱要變更。'),
+        ok: '完成交接'
+      }).then(function (fd) {
+        if (!fd) return;
+        return busy(btn, Api.call('handover', h)).then(function (res) {
+          S.cache.members = res.members;
+          delete S.cache.officers;
+          delete S.cache.directory;
+          toast('交接完成：存檔 ' + res.archived + ' 位、更新 ' + res.changed + ' 位');
+          go('officers', true);
+        });
+      }).catch(fail);
+    },
+    vote: function (form, btn) {
+      var fd = new FormData(form);
+      var choices = fd.getAll('choice').map(Number);
+      if (!choices.length) { toast('請至少選一個選項', 'error'); return; }
+      var again = !!(S.cache['poll:' + fd.get('pollId')] || {}).myChoices;
+      busy(btn, Api.call('vote', { pollId: fd.get('pollId'), choices: choices })).then(function (p) {
+        S.cache['poll:' + p.id] = p;
+        upsertPoll(p);
+        render();
+        toast(again ? '已更新你的選擇' : '已送出，謝謝你的回覆');
+      }).catch(fail);
+    },
+    poll: function (form, btn) {
+      var fd = new FormData(form);
+      var x = {
+        id: fd.get('id') || '', title: String(fd.get('title') || '').trim(), description: fd.get('description') || '',
+        options: String(fd.get('options') || '').split(/\n/).map(function (o) { return o.trim(); }).filter(Boolean),
+        multi: fd.get('multi') === 'on', audience: fd.get('audience') || '', deadline: fromInput(fd.get('deadline'))
+      };
+      if (!x.title) { toast('請填寫標題', 'error'); form.title.focus(); return; }
+      if (x.options.length < 2) { toast('請至少填兩個選項（一行一個）', 'error'); form.options.focus(); return; }
+      if (!x.id && x.deadline && Date.parse(x.deadline) <= Date.now()) { toast('截止時間要在現在之後', 'error'); return; }
+      busy(btn, Api.call('savePoll', { poll: x, notify: fd.get('notify') === 'on' })).then(function (res) {
+        S.cache['poll:' + res.poll.id] = res.poll;
+        upsertPoll(res.poll);
+        go('poll/' + res.poll.id, true);
+        saveToast(x.id ? '調查已更新' : '調查已建立', res.push);
+      }).catch(fail);
+    },
+    shop: function (form, btn) {
+      var fd = new FormData(form);
+      var d = { name: String(fd.get('name') || '').trim(), intro: fd.get('intro'), offer: fd.get('offer'), address: fd.get('address'), hours: fd.get('hours'), url: String(fd.get('url') || '').trim() };
+      if (!d.name) { toast('請填寫商家名稱', 'error'); form.name.focus(); return; }
+      busy(btn, Api.call('updateShop', d)).then(function (me) {
+        S.me = me;
+        delete S.cache.directory;
+        closeSheet();
+        render();
+        toast('商家資料已儲存');
       }).catch(fail);
     },
     reqLink: function (form, btn) {
@@ -2027,6 +2683,15 @@
       if (wl && S.walkinCands) wl.innerHTML = walkinRows(S.walkinCands, t.value);
       return;
     }
+    if (f === 'ho') {
+      var hq = t.value.trim().toLowerCase();
+      document.querySelectorAll('.ho-row').forEach(function (row) {
+        row.hidden = !!hq && row.getAttribute('data-name').toLowerCase().indexOf(hq) < 0;
+      });
+      return;
+    }
+    var hf = t.closest && t.closest('form[data-form="handover"]');
+    if (hf) { hoSummary(hf); return; }
     if (f === 'mem') {
       S.memQuery = t.value;
       var mb = document.getElementById('mem-list');
@@ -2049,6 +2714,8 @@
       if (ot) { ot.hidden = e.target.value !== '__other'; if (!ot.hidden) ot.focus(); }
       return;
     }
+    var hf = e.target.closest && e.target.closest('form[data-form="handover"]');
+    if (hf) { hoSummary(hf); return; }
     if (e.target.id === 'agree-box') {
       var sb = e.target.closest('form').querySelector('button[type=submit]');
       if (sb) sb.disabled = !e.target.checked;

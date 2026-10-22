@@ -32,9 +32,24 @@ window.Mock = (function () {
     '訪客': { uid: 'U-demo-guest', name: 'LINE 使用者' }
   };
 
-  var EVENT_CATS = ['例會', '理監事會', '訓練', '公益服務', '聯誼', '國際交流', '其他'];
-  var NEWS_CATS = ['會務公告', '活動花絮', '會員動態', '國際青商', '其他'];
-  var DOC_CATS = ['章程規章', '會議紀錄', '行事曆', '表單', '簡報資料', '其他'];
+  // 與「類別」工作表相同：類型、名稱、顏色、計入例會出席
+  var CATS = [
+    ['活動', '例會', '#0567B1', true], ['活動', '理監事會', '#4B4FA8'], ['活動', '籌備會', '#6E7B8B'], ['活動', '友會交接', '#8E5BB5'],
+    ['活動', '訓練', '#1B8A5A'], ['活動', '公益服務', '#E8590C'], ['活動', '聯誼', '#C2407A'], ['活動', '國際交流', '#0E8C8C'], ['活動', '其他', '#8A94A3'],
+    ['消息', '會務公告', '#0567B1'], ['消息', '活動花絮', '#E8590C'], ['消息', '會員動態', '#1B8A5A'], ['消息', '國際青商', '#0E8C8C'], ['消息', '其他', '#8A94A3'],
+    ['文件', '章程規章'], ['文件', '會議紀錄'], ['文件', '行事曆'], ['文件', '表單'], ['文件', '簡報資料'], ['文件', '其他']
+  ];
+  function catNames(t) { return CATS.filter(function (c) { return c[0] === t; }).map(function (c) { return c[1]; }); }
+  function catColors(t) { var o = {}; CATS.forEach(function (c) { if (c[0] === t && c[2]) o[c[1]] = c[2]; }); return o; }
+  function pickCat(t, v) { var n = catNames(t); return n.indexOf(v) >= 0 ? v : '其他'; }
+  var EVENT_CATS = catNames('活動'), NEWS_CATS = catNames('消息'), DOC_CATS = catNames('文件');
+  var MEETING_CATS = CATS.filter(function (c) { return c[3]; }).map(function (c) { return c[1]; });
+  var REQUIREMENTS = [
+    { role: '預備會員', name: '例會出席', categories: ['例會'], need: 3, desc: '出席例會 3 次' },
+    { role: '預備會員', name: '公益服務', categories: ['公益服務'], need: 1, desc: '參加公益服務 1 次' },
+    { role: '預備會員', name: '訓練課程', categories: ['訓練'], need: 1, desc: '參加訓練 1 次' }
+  ];
+  var TITLE_ORDER = ['會長', '直前會長', '副會長', '秘書長', '副秘書長', '財務長', '常務理事', '理事', '常務監事', '監事', '執行長', '主任委員', '主委', '副主委', '委員', '顧問', '特友會長'];
   var INDUSTRIES = ['營造工程', '製造業', '餐飲', '零售批發', '金融保險', '不動產', '醫療保健', '教育', '資訊科技', '設計行銷', '運輸物流', '農林漁牧', '法律會計', '服務業', '其他'];
 
   var db, current = '管理員', friend = {};
@@ -83,6 +98,23 @@ window.Mock = (function () {
         m('M010', '劉家瑋', '0912000010', '會員', '', '家瑋保險經紀', '2021', '', '金融保險', ''),
         m('M011', '許文彥', '0912000011', '特友', '', '文彥土地代書', '2009', 'U-demo-11', '不動產', '1979-09-09')
       ],
+      officers: [
+        ['2025', '黃國明', '特友', '會長'], ['2025', '王建宏', '管理員', '副會長'], ['2025', '陳怡君', '管理員', '秘書長'], ['2025', '李承翰', '幹部', '財務長'], ['2025', '許文彥', '特友', '監事'],
+        ['2024', '許文彥', '特友', '會長'], ['2024', '黃國明', '特友', '直前會長'], ['2024', '王建宏', '管理員', '秘書長'], ['2024', '蔡宜蓁', '幹部', '公關主委']
+      ].map(function (r) { return { term: r[0], name: r[1], role: r[2], title: r[3], memberId: '' }; }),
+      scheduled: [
+        { id: 'S1', sendAt: at(4, 9), audienceLabel: '會員以上', audience: { mode: 'minRole', role: '會員' }, title: '例會提醒：後天晚上 7 點', text: '請記得穿會服，18:30 開始報到用餐。',
+          status: '待發送', sentAt: '', result: '', createdBy: '陳怡君', createdAt: at(-1, 15) },
+        { id: 'S0', sendAt: at(-3, 9), audienceLabel: '全體已綁定會員', audience: { mode: 'all' }, title: '颱風假：本週例會延期', text: '', status: '已發送', sentAt: at(-3, 9, 4), result: '已發送 9 人', createdBy: '王建宏', createdAt: at(-4, 22) }
+      ],
+      polls: [
+        { id: 'P1', title: '十二月聯誼晚會日期', description: '請勾選可以出席的日期（可複選），票數最多的日期會在下次理監事會確認。', options: ['12/5（六）晚上', '12/12（六）晚上', '12/19（六）晚上'],
+          multi: true, audience: '會員', deadline: at(6, 23, 59), status: '開放', createdBy: '吳佩珊', createdAt: at(-2, 10) },
+        { id: 'P2', title: '尾牙地點', description: '預算每桌 12,000 元以內。', options: ['港區海鮮餐廳', '大肚山景觀餐廳', '會館外燴'],
+          multi: false, audience: '會員', deadline: at(12, 23, 59), status: '開放', createdBy: '陳怡君', createdAt: at(-1, 20) },
+        { id: 'P0', title: '會服顏色', description: '', options: ['深藍', '白色', '淺灰'], multi: false, audience: '會員', deadline: at(-20, 23, 59), status: '開放', createdBy: '吳佩珊', createdAt: at(-35, 10) }
+      ],
+      votes: [],
       events: [
         ev('E1', monthOf(5) + '月份月例會', '例會', at(5, 19), at(5, 21, 30), '龍井區公所 3 樓禮堂', '會員', at(3, 23, 59), 0, '會員免費，眷屬每位 300 元',
           '本月例會邀請台中港務分公司分享港區產業發展。\n\n18:30 報到用餐\n19:00 例會開始\n20:00 專題演講\n21:30 散會\n\n請穿著會服。'),
@@ -97,7 +129,10 @@ window.Mock = (function () {
         ev('E6', monthOf(-16) + '月份月例會', '例會', at(-16, 19), at(-16, 21, 30), '龍井區公所 3 樓禮堂', '會員', '', 0, '', '', '', 'https://photos.app.goo.gl/demo-meeting'),
         ev('E7', '中秋聯誼烤肉', '聯誼', at(-30, 17), at(-30, 21), '竹坑南寮登山步道入口廣場', '訪客', '', 0, '', '', '', 'https://photos.app.goo.gl/demo-bbq'),
         ev('E9', '今天：會務幹部交流茶會', '聯誼', at(0, new Date().getHours(), 0), at(0, Math.min(23, new Date().getHours() + 2), 0), '會館', '會員', '', 0, '免費', '示範掃碼報到用：活動進行中，可以在活動頁開啟報到 QR。'),
-        ev('E8', '國際青商週：日本姊妹會來訪接待', '國際交流', at(60, 10), at(60, 16), '待定', '會員', '', 0, '', '草稿，行程確認中。', '草稿')
+        ev('E8', '國際青商週：日本姊妹會來訪接待', '國際交流', at(60, 10), at(60, 16), '待定', '會員', '', 0, '', '草稿，行程確認中。', '草稿'),
+        ev('E10', '九月份淨灘', '公益服務', at(-45, 8), at(-45, 11), '麗水漁港南側沙灘', '訪客', '', 0, '免費', ''),
+        ev('E11', '大甲青商會長交接典禮', '友會交接', at(9, 17), at(9, 21), '大甲區體育館', '會員', at(6, 23, 59), 0, '友會邀請，請著正式會服', '本會組團前往祝賀，可共乘。'),
+        ev('E12', '年度會員大會籌備會', '籌備會', at(3, 20), at(3, 21, 30), '會館會議室', '幹部', '', 0, '', '分工：場地、節目、報到、攝影。')
       ],
       regs: [],
       docs: [
@@ -144,8 +179,31 @@ window.Mock = (function () {
     for (var g = 0; g < 9; g++) {
       db.regs.push({ id: 'R-g' + g, eventId: 'E2', memberId: '', name: '來賓' + (g + 1), phone: '09330000' + (10 + g), lineUid: 'U-guest-' + g, count: 2, note: '', status: '報名', createdAt: at(-3, 10 + g) });
     }
+    // 張雅婷（預備會員）入會進度：例會 1 次、公益服務 1 次
+    addReg('E10', db.members[7], 1, '', at(-45, 7, 50));
+    addReg('E6', db.members[7], 1, '', at(-16, 18, 52));
+    // 會友商家
+    shop('M004', '蓁好烘焙坊', '堅持使用台灣在地小麥，歐式麵包與彌月禮盒，會議點心可預訂。', '台中市龍井區沙田路四段 123 號', '週二至週日 08:00–19:00', '會友出示會員證 9 折', 'https://www.facebook.com/demo-bakery');
+    shop('M007', '國明茶行', '三代經營高山茶與東方美人茶，企業禮盒客製。', '台中市龍井區中央路一段 88 號', '每日 09:00–21:00', '禮盒 95 折，滿千免運', '');
+    shop('M009', '凱文咖啡', '自家烘焙單品咖啡，二樓可包場開小型會議。', '台中市龍井區新興路 56 號', '週三公休 10:00–18:00', '會友飲品第二杯半價', 'https://www.instagram.com/demo-coffee');
+    shop('M005', '志豪水電行', '住家與店面水電配線、漏水檢修、太陽能熱水器。', '台中市龍井區龍門路 12 號', '週一至週六 08:00–18:00', '會友免收出車費', '');
+    // 調查回覆
+    [['M001', 'P1', [0, 1]], ['M002', 'P1', [1]], ['M004', 'P1', [1, 2]], ['M006', 'P1', [0, 1, 2]], ['M007', 'P1', [2]],
+      ['M002', 'P2', [0]], ['M003', 'P2', [1]], ['M006', 'P2', [0]], ['M001', 'P0', [0]], ['M002', 'P0', [0]], ['M005', 'P0', [2]]].forEach(function (v) {
+      var mem = db.members.filter(function (x) { return x.id === v[0]; })[0];
+      var p = db.polls.filter(function (x) { return x.id === v[1]; })[0];
+      db.votes.push({ pollId: v[1], memberId: mem.id, name: mem.name, choices: v[2].map(function (i) { return p.options[i]; }), votedAt: at(-1, 12) });
+    });
     friend = {};
     Object.keys(IDENTITY).forEach(function (k) { friend[k] = k !== '訪客'; });
+  }
+  function shop(id, name, intro, address, hours, offer, url) {
+    var mem = db.members.filter(function (x) { return x.id === id; })[0];
+    Object.assign(mem, { shopName: name, shopIntro: intro, shopAddress: address, shopHours: hours, shopOffer: offer, shopUrl: url });
+  }
+  function shopOut(m) {
+    if (!m.shopName) return null;
+    return { name: m.shopName, intro: m.shopIntro || '', address: m.shopAddress || '', hours: m.shopHours || '', offer: m.shopOffer || '', url: m.shopUrl || '' };
   }
 
   function ev(id, title, cat, start, end, loc, aud, dl, cap, fee, desc, status, albumUrl) {
@@ -177,8 +235,9 @@ window.Mock = (function () {
       uid: c.uid, lineName: c.lineName, picture: '', bound: !!c.member, disabled: c.disabled,
       role: c.roleName, level: c.level, perms: clone(c.perms),
       member: c.member ? { id: c.member.id, name: c.member.name, phone: c.member.phone, title: c.member.title, company: c.member.company, industry: c.member.industry,
-        email: c.member.email, birthday: c.member.birthday, joinYear: c.member.joinYear, phoneConsent: c.member.phoneConsent || '' } : null,
+        email: c.member.email, birthday: c.member.birthday, joinYear: c.member.joinYear, phoneConsent: c.member.phoneConsent || '', shop: shopOut(c.member) } : null,
       attendance: c.member ? memberAttendance(c.member.id, attendanceIndex(new Date().getFullYear())) : null,
+      progress: c.member ? progressFor(c.member) : null,
       pendingRequest: !c.member && pend ? { id: pend.id, name: pend.name, createdAt: pend.createdAt } : null
     };
   }
@@ -210,7 +269,7 @@ window.Mock = (function () {
     db.events.forEach(function (e) {
       var s = new Date(e.start);
       if (e.status !== '發布' || s.getFullYear() !== year || s.getTime() > now) return;
-      (e.category === '例會' ? meetings : others)[e.id] = true;
+      (MEETING_CATS.indexOf(e.category) >= 0 ? meetings : others)[e.id] = true;
     });
     var byMember = {};
     db.regs.forEach(function (r) {
@@ -220,6 +279,89 @@ window.Mock = (function () {
       (byMember[r.memberId] = byMember[r.memberId] || { meeting: {}, other: {} })[bucket][r.eventId] = true;
     });
     return { year: year, meetingTotal: Object.keys(meetings).length, otherTotal: Object.keys(others).length, byMember: byMember };
+  }
+  function progressFor(m) {
+    var reqs = REQUIREMENTS.filter(function (q) { return q.role === m.role; });
+    if (!reqs.length) return null;
+    var cnt = { _all: 0 }, seen = {};
+    db.regs.forEach(function (r) {
+      if (r.memberId !== m.id || !r.attended || !attending(r) || seen[r.eventId]) return;
+      var e = db.events.filter(function (x) { return x.id === r.eventId && x.status === '發布'; })[0];
+      if (!e) return;
+      seen[r.eventId] = 1; cnt[e.category] = (cnt[e.category] || 0) + 1; cnt._all++;
+    });
+    var items = reqs.map(function (q) {
+      var done = q.categories.length ? q.categories.reduce(function (s, c) { return s + (cnt[c] || 0); }, 0) : cnt._all;
+      return { name: q.name, categories: q.categories, need: q.need, done: done, ok: done >= q.need, desc: q.desc };
+    });
+    var okCount = items.filter(function (i) { return i.ok; }).length;
+    return { role: m.role, items: items, okCount: okCount, complete: okCount === items.length };
+  }
+  function titleRank(t) {
+    var keys = TITLE_ORDER.slice().sort(function (a, b) { return b.length - a.length; });
+    for (var i = 0; i < keys.length; i++) if (String(t || '').indexOf(keys[i]) >= 0) return TITLE_ORDER.indexOf(keys[i]);
+    return TITLE_ORDER.length;
+  }
+  function sortOfficers(list) {
+    list.forEach(function (x, i) { x._i = i; });
+    list.sort(function (a, b) { return (titleRank(a.title) - titleRank(b.title)) || ((BY[b.role] || {}).level - (BY[a.role] || {}).level) || (a._i - b._i); });
+    list.forEach(function (x) { delete x._i; });
+    return list;
+  }
+  /* ───────── 調查 ───────── */
+  function pollLevel(p) { return Math.max(1, audLevel(p.audience)); }
+  function pollVisible(p, c) { return !!c.member && c.level > 0 && pollLevel(p) <= c.level; }
+  function pollOpen(p) { return p.status === '開放' && (!p.deadline || Date.parse(p.deadline) > Date.now()); }
+  function pollOut(p, c, detail) {
+    var votes = db.votes.filter(function (v) { return v.pollId === p.id; });
+    var counts = p.options.map(function () { return 0; }), names = p.options.map(function () { return []; }), mine = null, voters = 0;
+    votes.forEach(function (v) {
+      var isMine = c.member && v.memberId === c.member.id, any = false;
+      if (isMine) mine = [];
+      p.options.forEach(function (o, i) {
+        if (v.choices.indexOf(o) < 0) return;
+        any = true; counts[i]++; names[i].push(v.name); if (isMine) mine.push(i);
+      });
+      if (any) voters++;
+    });
+    var o = { id: p.id, title: p.title, description: p.description, multi: p.multi, audience: p.audience, audienceLevel: pollLevel(p), deadline: p.deadline,
+      status: p.status, open: pollOpen(p), voters: voters, myChoices: mine && mine.length ? mine : null,
+      options: p.options.map(function (t, i) { var x = { text: t, count: counts[i] }; if (detail) x.names = names[i]; return x; }), createdBy: p.createdBy, createdAt: p.createdAt };
+    if (detail && (c.perms.newsManage || c.perms.viewRegs)) {
+      o.unvoted = membersAtLevel(o.audienceLevel).filter(function (m) { return !votes.some(function (v) { return v.memberId === m.id; }); })
+        .map(function (m) { return { id: m.id, name: m.name, role: m.role, bound: !!m.lineUid }; });
+    }
+    return o;
+  }
+  function findPoll(id, c) {
+    var p = db.polls.filter(function (x) { return x.id === id; })[0];
+    if (!p || !pollVisible(p, c)) throw err('NOT_FOUND', '找不到這份調查，或你沒有權限查看');
+    return p;
+  }
+  function visiblePolls(c) {
+    var cutoff = Date.now() - 45 * DAY;
+    return db.polls.filter(function (p) { return pollVisible(p, c) && (pollOpen(p) || Date.parse(p.deadline || p.createdAt) >= cutoff); })
+      .map(function (p) { return pollOut(p, c, false); })
+      .sort(function (a, b) {
+        if (a.open !== b.open) return a.open ? -1 : 1;
+        return a.open ? (a.deadline || '9999').localeCompare(b.deadline || '9999') : (b.deadline || '').localeCompare(a.deadline || '');
+      });
+  }
+  /** 示範模式模擬每 5 分鐘的排程：到時間的預約直接當作已發送 */
+  function runSchedule() {
+    db.scheduled.forEach(function (x) {
+      if (x.status !== '待發送' || Date.parse(x.sendAt) > Date.now()) return;
+      try {
+        var r = doPush({ member: { name: x.createdBy + '（預約）' } }, x.audience, x.title, x.text);
+        Object.assign(x, { status: '已發送', sentAt: new Date().toISOString(), result: '已發送 ' + r.sent + ' 人' });
+      } catch (e) { Object.assign(x, { status: '失敗', sentAt: new Date().toISOString(), result: '失敗：' + e.message }); }
+    });
+  }
+  function scheduledList() {
+    runSchedule();
+    var pend = db.scheduled.filter(function (x) { return x.status === '待發送'; }).sort(function (a, b) { return a.sendAt.localeCompare(b.sendAt); });
+    var done = db.scheduled.filter(function (x) { return x.status !== '待發送'; }).sort(function (a, b) { return (b.sentAt || b.createdAt).localeCompare(a.sentAt || a.createdAt); }).slice(0, 10);
+    return { pending: pend, done: done, triggerReady: pend.length > 0 };
   }
   function memberAttendance(id, idx) {
     var b = idx.byMember[id] || { meeting: {}, other: {} };
@@ -316,6 +458,9 @@ window.Mock = (function () {
     return db.docs.filter(function (x) { return (x.status === '發布' || c.perms.newsManage) && audLevel(x.audience) <= c.level; })
       .map(docOut).sort(function (a, b) { return DOC_CATS.indexOf(a.category) - DOC_CATS.indexOf(b.category); });
   }
+  function membersById(id) {
+    return db.members.filter(function (x) { return x.id === id; })[0];
+  }
   function monthBirthdays() {
     var now = new Date(), m = now.getMonth() + 1, d = now.getDate();
     return db.members.filter(function (x) { var r = BY[x.role]; return x.status !== '停用' && r && r.level > 0 && x.birthday; }).map(function (x) {
@@ -351,6 +496,12 @@ window.Mock = (function () {
       regs.forEach(function (r) { if (r.memberId) replied[r.memberId] = true; if (r.lineUid) replied['u:' + r.lineUid] = true; });
       membersAtLevel(lvl).forEach(function (m) { if (!replied[m.id] && !replied['u:' + m.lineUid]) add(m.lineUid); });
       return { uids: uids, label: '「' + e.title + '」未回覆者' };
+    }
+    if (mode === 'pollUnvoted') {
+      var p = db.polls.filter(function (x) { return x.id === aud.pollId; })[0];
+      if (!p) throw err('NOT_FOUND', '找不到這份調查');
+      membersAtLevel(pollLevel(p)).forEach(function (m) { if (!db.votes.some(function (v) { return v.pollId === p.id && v.memberId === m.id; })) add(m.lineUid); });
+      return { uids: uids, label: '「' + p.title + '」未填寫者' };
     }
     var mem = db.members.filter(function (m) { return m.status !== '停用' && m.lineUid; });
     var label;
@@ -409,7 +560,10 @@ window.Mock = (function () {
         events: visibleEvents(c), news: visibleNews(c),
         docs: visibleDocs(c),
         birthdays: c.perms.directory ? monthBirthdays() : [],
+        polls: visiblePolls(c),
         categories: { event: EVENT_CATS, news: NEWS_CATS, doc: DOC_CATS },
+        catColors: { event: catColors('活動'), news: catColors('消息') },
+        meetingCategories: MEETING_CATS,
         industries: INDUSTRIES,
         serverTime: new Date().toISOString(),
         pushReady: true
@@ -547,7 +701,7 @@ window.Mock = (function () {
       if (!/^https:\/\//.test(x.url || '')) throw err('INVALID', '請填寫 https:// 開頭的連結（例如 Google 雲端硬碟的分享連結）');
       var aud = BY[x.audience] ? x.audience : '會員';
       if (audLevel(aud) > c.level) aud = c.roleName;
-      var rec = { title: x.title.trim(), category: DOC_CATS.indexOf(x.category) >= 0 ? x.category : '其他', url: x.url, description: x.description || '', audience: aud,
+      var rec = { title: x.title.trim(), category: pickCat('文件', x.category), url: x.url, description: x.description || '', audience: aud,
         status: x.status === '草稿' ? '草稿' : '發布', updatedAt: new Date().toISOString() };
       var row;
       if (x.id) {
@@ -568,7 +722,7 @@ window.Mock = (function () {
       return db.members.filter(function (m) { return m.status !== '停用'; }).map(function (m) {
         var r = BY[m.role];
         return { id: m.id, name: m.name, role: m.role, level: r ? r.level : 0, title: m.title, company: m.company, industry: m.industry || '',
-          phone: m.phoneConsent ? m.phone : '', phoneHidden: !m.phoneConsent, email: m.email, joinYear: m.joinYear };
+          phone: m.phoneConsent ? m.phone : '', phoneHidden: !m.phoneConsent, email: m.email, joinYear: m.joinYear, shop: shopOut(m) };
       }).sort(function (a, b) { return (b.level - a.level) || a.id.localeCompare(b.id); });
     },
     saveEvent: function (c, d) {
@@ -580,7 +734,7 @@ window.Mock = (function () {
       var aud = BY[e.audience] ? e.audience : '訪客';
       if (audLevel(aud) > c.level) aud = c.roleName;
       var rec = {
-        title: e.title.trim(), category: EVENT_CATS.indexOf(e.category) >= 0 ? e.category : '其他', start: e.start, end: e.end || '',
+        title: e.title.trim(), category: pickCat('活動', e.category), start: e.start, end: e.end || '',
         location: e.location || '', mapUrl: /^https:\/\//.test(e.mapUrl || '') ? e.mapUrl : '', description: e.description || '',
         imageUrl: /^https:\/\//.test(e.imageUrl || '') ? e.imageUrl : '', albumUrl: /^https:\/\//.test(e.albumUrl || '') ? e.albumUrl : '', audience: aud, deadline: e.deadline || '',
         capacity: Math.max(0, Math.floor(Number(e.capacity) || 0)), fee: e.fee || '', status: e.status === '草稿' ? '草稿' : '發布'
@@ -589,6 +743,7 @@ window.Mock = (function () {
       if (e.id) {
         row = findEvent(e.id, c);
         if (row.status === '取消') rec.status = '取消';
+        if (e.category && e.category === row.category) rec.category = row.category;
         Object.assign(row, rec);
       } else {
         row = Object.assign({ id: 'E' + uid4(), createdBy: c.member.name }, rec);
@@ -618,7 +773,7 @@ window.Mock = (function () {
       if (!String(n.content || '').trim()) throw err('INVALID', '請填寫內容');
       var aud = BY[n.audience] ? n.audience : '訪客';
       if (audLevel(aud) > c.level) aud = c.roleName;
-      var rec = { title: n.title.trim(), category: NEWS_CATS.indexOf(n.category) >= 0 ? n.category : '其他', content: n.content,
+      var rec = { title: n.title.trim(), category: pickCat('消息', n.category), content: n.content,
         imageUrl: /^https:\/\//.test(n.imageUrl || '') ? n.imageUrl : '', audience: aud, pinned: !!n.pinned, status: n.status === '草稿' ? '草稿' : '發布' };
       var row;
       if (n.id) {
@@ -649,6 +804,137 @@ window.Mock = (function () {
       if (!String(d.title || '').trim()) throw err('INVALID', '請填寫通知標題');
       if (!String(d.text || '').trim()) throw err('INVALID', '請填寫通知內容');
       return doPush(c, d.audience, d.title, d.text);
+    },
+    schedulePush: function (c, d) {
+      if (!String(d.title || '').trim()) throw err('INVALID', '請填寫通知標題');
+      if (!String(d.text || '').trim()) throw err('INVALID', '請填寫通知內容');
+      var t = Date.parse(d.sendAt || '');
+      if (!t) throw err('INVALID', '請選擇預約發送時間');
+      if (t < Date.now() + 2 * 60000) throw err('INVALID', '預約時間請設定在至少 2 分鐘之後；要馬上發送請選「立即發送」');
+      if (t > Date.now() + 60 * DAY) throw err('INVALID', '預約時間不能超過 60 天後');
+      var target = resolveAudience(c, d.audience);
+      var row = { id: 'S' + uid4(), sendAt: new Date(t).toISOString(), audienceLabel: target.label, audience: clone(d.audience || {}), title: d.title.trim(), text: d.text,
+        status: '待發送', sentAt: '', result: '', createdBy: c.member.name, createdAt: new Date().toISOString() };
+      db.scheduled.push(row);
+      return { scheduled: clone(row), list: scheduledList() };
+    },
+    scheduledPushes: function () { return scheduledList(); },
+    cancelScheduledPush: function (c, d) {
+      var x = db.scheduled.filter(function (y) { return y.id === d.id; })[0];
+      if (!x) throw err('NOT_FOUND', '找不到這筆預約');
+      if (x.status !== '待發送') throw err('INVALID', '這筆預約目前是「' + x.status + '」，無法取消');
+      Object.assign(x, { status: '已取消', result: '由 ' + c.member.name + ' 取消' });
+      return scheduledList();
+    },
+    prospects: function () {
+      var roles = {};
+      REQUIREMENTS.forEach(function (q) { (roles[q.role] = roles[q.role] || []).push({ name: q.name, categories: q.categories, need: q.need, desc: q.desc }); });
+      return {
+        requirements: Object.keys(roles).map(function (r) { return { role: r, items: roles[r] }; }),
+        members: db.members.filter(function (m) { return m.status !== '停用' && roles[m.role]; }).map(function (m) {
+          return { id: m.id, name: m.name, role: m.role, joinYear: m.joinYear, company: m.company, bound: !!m.lineUid, progress: progressFor(m) };
+        })
+      };
+    },
+    officers: function () {
+      var current = db.members.filter(function (m) { return m.status !== '停用' && m.title && !BY[m.title]; })
+        .map(function (m) { return { memberId: m.id, name: m.name, role: m.role, title: m.title }; });
+      var terms = {};
+      db.officers.forEach(function (r) { (terms[r.term] = terms[r.term] || []).push(clone(r)); });
+      return { current: sortOfficers(current), terms: Object.keys(terms).sort(function (a, b) { return b.localeCompare(a); }).map(function (t) { return { term: t, list: sortOfficers(terms[t]) }; }) };
+    },
+    handover: function (c, d) {
+      var term = String(d.term || '').trim().slice(0, 20);
+      if (!term) throw err('INVALID', '請填寫卸任年度，例如 ' + new Date().getFullYear());
+      var archive = d.archive || [], changes = d.changes || [];
+      if (!archive.length && !changes.length) throw err('INVALID', '沒有要存檔或變更的資料');
+      var patches = [];
+      changes.forEach(function (x) {
+        var m = membersById(x.id);
+        if (!m) throw err('NOT_FOUND', '找不到會員 ' + x.id);
+        var patch = {};
+        if (x.role !== undefined && x.role !== m.role) {
+          guardMember(c, m);
+          if (!BY[x.role]) throw err('INVALID', '沒有「' + x.role + '」這個角色');
+          if (BY[x.role].level > c.level) throw err('FORBIDDEN', '不能指派比自己高的角色（' + m.name + '）');
+          if (m.id === c.member.id) throw err('FORBIDDEN', '交接時不能變更自己的角色，請交接後由新任管理員調整');
+          patch.role = x.role;
+        }
+        if (x.title !== undefined && String(x.title).trim() !== (m.title || '')) { guardMember(c, m); patch.title = String(x.title).trim().slice(0, 40); }
+        if (Object.keys(patch).length) patches.push([m, patch]);
+      });
+      var n = 0;
+      archive.forEach(function (id) {
+        var m = membersById(id);
+        if (!m) return;
+        db.officers = db.officers.filter(function (r) { return !(r.term === term && r.memberId === id); });
+        db.officers.push({ term: term, memberId: id, name: m.name, role: m.role, title: m.title });
+        n++;
+      });
+      patches.forEach(function (p) { Object.assign(p[0], p[1]); });
+      return { term: term, archived: n, changed: patches.length, members: membersList() };
+    },
+    poll: function (c, d) { return pollOut(findPoll(d.id, c), c, true); },
+    vote: function (c, d) {
+      if (!c.member) throw err('FORBIDDEN', '請先完成會員綁定');
+      var p = findPoll(d.pollId, c);
+      if (!pollOpen(p)) throw err('CLOSED', '這份調查已經截止');
+      var picked = [];
+      (d.choices || []).forEach(function (i) { if (i >= 0 && i < p.options.length && picked.indexOf(p.options[i]) < 0) picked.push(p.options[i]); });
+      if (!picked.length) throw err('INVALID', '請至少選一個選項');
+      if (!p.multi && picked.length > 1) throw err('INVALID', '這份調查只能選一個');
+      db.votes = db.votes.filter(function (v) { return !(v.pollId === p.id && v.memberId === c.member.id); });
+      db.votes.push({ pollId: p.id, memberId: c.member.id, name: c.member.name, choices: picked, votedAt: new Date().toISOString() });
+      return pollOut(p, c, true);
+    },
+    savePoll: function (c, d) {
+      var x = d.poll || {};
+      if (!String(x.title || '').trim()) throw err('INVALID', '請填寫調查標題');
+      var opts = [];
+      (x.options || []).forEach(function (o) { o = String(o || '').trim().slice(0, 60); if (o && opts.indexOf(o) < 0) opts.push(o); });
+      if (opts.length < 2) throw err('INVALID', '請至少填兩個選項');
+      if (opts.length > 20) throw err('INVALID', '選項最多 20 個');
+      var aud = BY[x.audience] && BY[x.audience].level > 0 ? x.audience : '';
+      if (aud && audLevel(aud) > c.level) aud = c.roleName;
+      var rec = { title: x.title.trim().slice(0, 60), description: String(x.description || '').slice(0, 500), options: opts, multi: !!x.multi, audience: aud, deadline: x.deadline || '' };
+      var row;
+      if (x.id) { row = findPoll(x.id, c); Object.assign(row, rec); }
+      else {
+        if (rec.deadline && Date.parse(rec.deadline) <= Date.now()) throw err('INVALID', '截止時間要在現在之後');
+        row = Object.assign({ id: 'P' + uid4(), status: '開放', createdBy: c.member.name, createdAt: new Date().toISOString() }, rec);
+        db.polls.push(row);
+      }
+      var out = { poll: pollOut(row, c, true), push: null };
+      if (d.notify) {
+        out.push = c.perms.push ? doPush(c, { mode: 'minRole', role: row.audience || '預備會員' }, '調查：' + row.title)
+          : { skipped: true, message: '調查已儲存。你的角色沒有推播權限，所以沒有發送通知' };
+      }
+      return out;
+    },
+    setPollStatus: function (c, d) {
+      var p = findPoll(d.id, c);
+      p.status = d.open ? '開放' : '關閉';
+      if (d.open && p.deadline && Date.parse(p.deadline) <= Date.now()) p.deadline = '';
+      return pollOut(p, c, true);
+    },
+    deletePoll: function (c, d) {
+      var p = findPoll(d.id, c);
+      db.polls = db.polls.filter(function (x) { return x !== p; });
+      db.votes = db.votes.filter(function (v) { return v.pollId !== p.id; });
+      return { id: p.id, deleted: true };
+    },
+    updateShop: function (c, d) {
+      if (!c.member) throw err('FORBIDDEN', '請先完成會員綁定');
+      var name = String(d.name || '').trim().slice(0, 40), url = String(d.url || '').trim();
+      if (url && !/^https:\/\/\S+$/i.test(url)) {
+        if (/^[\w.-]+\.[a-z]{2,}(\/\S*)?$/i.test(url)) url = 'https://' + url;
+        else throw err('INVALID', '網址請以 https:// 開頭');
+      }
+      if (!name && (d.intro || d.address || d.offer)) throw err('INVALID', '請填寫商家名稱');
+      var t = function (v, n) { return String(v || '').trim().slice(0, n); };
+      Object.assign(c.member, name ? { shopName: name, shopIntro: t(d.intro, 500), shopAddress: t(d.address, 100), shopHours: t(d.hours, 60), shopOffer: t(d.offer, 100), shopUrl: url }
+        : { shopName: '', shopIntro: '', shopAddress: '', shopHours: '', shopOffer: '', shopUrl: '' });
+      return meOut(ctx());
     },
     pushLog: function () { return db.pushlog.slice().reverse().slice(0, 30); },
     members: function () { return membersList(); },
@@ -706,7 +992,9 @@ window.Mock = (function () {
   var PERM = { directory: 'directory', saveEvent: 'eventManage', cancelEvent: 'eventManage', saveNews: 'newsManage', deleteNews: 'newsManage',
     saveDoc: 'newsManage', deleteDoc: 'newsManage', checkinQr: 'viewRegs', setAttendance: 'viewRegs', attendanceStats: 'viewRegs',
     pushPreview: 'push', push: 'push', pushLog: 'push', members: 'memberManage', updateMember: 'memberManage', unbindMember: 'memberManage',
-    requests: 'memberManage', handleRequest: 'memberManage' };
+    requests: 'memberManage', handleRequest: 'memberManage',
+    prospects: 'viewRegs', officers: 'directory', handover: 'memberManage', schedulePush: 'push', scheduledPushes: 'push', cancelScheduledPush: 'push',
+    savePoll: 'newsManage', setPollStatus: 'newsManage', deletePoll: 'newsManage' };
 
   function call(action, data) {
     return new Promise(function (resolve, reject) {
