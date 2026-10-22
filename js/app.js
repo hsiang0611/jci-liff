@@ -1478,11 +1478,17 @@
     editMe: function () {
       var m = S.me.member;
       if (!m) return;
-      var list = '<datalist id="ind-list">' + (S.industries || []).map(function (i) { return '<option value="' + esc(i) + '">'; }).join('') + '</datalist>';
+      var inds = S.industries || [];
+      var known = inds.indexOf(m.industry) >= 0;
+      var other = m.industry && !known;
+      var sel = '<select id="u-industry" name="industrySel"><option value=""' + (!m.industry ? ' selected' : '') + '>未填</option>' +
+        inds.map(function (i) { return '<option value="' + esc(i) + '"' + (i === m.industry ? ' selected' : '') + '>' + esc(i) + '</option>'; }).join('') +
+        '<option value="__other"' + (other ? ' selected' : '') + '>其他（自行輸入）</option></select>' +
+        '<input id="u-industry-other" name="industryOther" maxlength="30" value="' + esc(other ? m.industry : '') + '" placeholder="請輸入行業"' + (other ? '' : ' hidden') + ' style="margin-top:8px">';
       openSheet('<h2 class="sheet-title">編輯我的資料<small>姓名與手機如需修改請洽秘書處</small></h2>' +
         '<form class="form" data-form="updateMe" novalidate>' +
         field('公司／職業', '<input id="u-company" name="company" maxlength="60" value="' + esc(m.company) + '" autocomplete="organization">', '', 'u-company') +
-        field('行業', '<input id="u-industry" name="industry" maxlength="30" list="ind-list" value="' + esc(m.industry) + '" placeholder="選擇或自行輸入">' + list, '會友在通訊錄可以依行業找到你', 'u-industry') +
+        field('行業', sel, '會友在通訊錄可以依行業找到你', 'u-industry') +
         field('Email', '<input id="u-email" name="email" type="email" inputmode="email" maxlength="80" value="' + esc(m.email) + '" autocomplete="email">', '', 'u-email') +
         field('生日', '<input id="u-birthday" name="birthday" type="date" value="' + esc(m.birthday) + '" max="' + new Date().toISOString().slice(0, 10) + '">', '生日當天會收到祝福；首頁的「本月壽星」只顯示月日，不顯示年份', 'u-birthday') +
         '<div class="form-actions"><button type="submit" class="btn btn-primary btn-block">儲存</button></div></form>', '編輯我的資料');
@@ -1923,7 +1929,8 @@
     },
     updateMe: function (form, btn) {
       var fd = new FormData(form);
-      busy(btn, Api.call('updateMe', { company: fd.get('company'), industry: fd.get('industry'), email: fd.get('email'), birthday: fd.get('birthday') })).then(function (me) {
+      var industry = fd.get('industrySel') === '__other' ? String(fd.get('industryOther') || '').trim() : (fd.get('industrySel') || '');
+      busy(btn, Api.call('updateMe', { company: fd.get('company'), industry: industry, email: fd.get('email'), birthday: fd.get('birthday') })).then(function (me) {
         S.me = me;
         delete S.cache.directory;
         closeSheet();
@@ -2031,6 +2038,11 @@
     }
   });
   document.addEventListener('change', function (e) {
+    if (e.target.id === 'u-industry') {
+      var ot = document.getElementById('u-industry-other');
+      if (ot) { ot.hidden = e.target.value !== '__other'; if (!ot.hidden) ot.focus(); }
+      return;
+    }
     if (e.target.id === 'agree-box') {
       var sb = e.target.closest('form').querySelector('button[type=submit]');
       if (sb) sb.disabled = !e.target.checked;
