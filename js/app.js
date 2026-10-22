@@ -1307,7 +1307,8 @@
   }
   function qrSheet(ev, q) {
     var when = q.open ? '<span class="pill is-ok">報到進行中</span>' : '<span class="pill is-muted">報到時間：' + fmtDT(q.from) + ' 起</span>';
-    return '<h2 class="sheet-title">報到 QR code<small>' + esc(ev ? ev.title : '') + '</small></h2>' +
+    return '<div class="qr-head"><span class="qr-label">' + icon('qr') + '活動報到</span><h2 class="qr-title">' + esc(ev ? ev.title : '') + '</h2>' +
+      (ev && ev.start ? '<p class="qr-when">' + esc(fmtWhen(ev.start, ev.end)) + (ev.location ? '<br>' + esc(ev.location) : '') + '</p>' : '') + '</div>' +
       '<div class="qr-box">' + qrSvg(q.url) + '</div>' +
       '<p class="qr-code">報到碼 <b>' + esc(q.code) + '</b></p><p class="sheet-text" style="text-align:center">' + when + '</p>' +
       '<p class="hint">把這個畫面投影或列印在報到桌，會員用 LINE 掃描（LINE 首頁右上角的掃描）就能自己報到。報到時間為活動開始前 2 小時到結束後 3 小時。</p>' +
