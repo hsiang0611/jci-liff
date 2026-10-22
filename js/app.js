@@ -358,11 +358,17 @@
     return s.t ? '<span class="pill ' + s.c + '">' + esc(s.t) + '</span>' : '';
   }
 
+  /** 週六綠色、週日紅色，平日不變 */
+  function weekendCls(t) {
+    if (!t) return '';
+    return t.w === 6 ? ' is-sat' : t.w === 0 ? ' is-sun' : '';
+  }
+
   function eventRow(ev) {
     var t = tp(ev.start);
     var cls = 'erow' + (isPast(ev) ? ' is-past' : '') + (ev.status === '取消' ? ' is-cancelled' : '');
     return '<a class="' + cls + '" href="#/event/' + encodeURIComponent(ev.id) + '" data-nav>' +
-      '<div class="erow-date"><b>' + (t ? t.d : '–') + '</b><span>週' + (t ? WD[t.w] : '') + '</span></div>' +
+      '<div class="erow-date' + weekendCls(t) + '"><span class="erow-m">' + (t ? t.m + '月' : '') + '</span><b>' + (t ? t.d : '–') + '</b><span class="erow-w">週' + (t ? WD[t.w] : '') + '</span></div>' +
       '<div class="erow-body">' + catTag(ev.category) +
       '<div class="erow-title">' + esc(ev.title) + '</div>' +
       '<div class="erow-meta">' + (t ? t.hm : '') + (ev.location ? '　' + esc(ev.location) : '') + '</div>' +
@@ -442,7 +448,7 @@
     if (next) {
       var t = tp(next.start);
       html += '<a class="next" href="#/event/' + encodeURIComponent(next.id) + '" data-nav>' +
-        '<div class="next-date"><span class="next-m">' + t.m + ' 月</span><b class="next-d">' + t.d + '</b><span class="next-w">週' + WD[t.w] + '</span></div>' +
+        '<div class="next-date' + weekendCls(t) + '"><span class="next-m">' + t.m + ' 月</span><b class="next-d">' + t.d + '</b><span class="next-w">週' + WD[t.w] + '</span></div>' +
         '<div class="next-body">' + catTag(next.category) + '<h3>' + esc(next.title) + '</h3>' +
         '<p>' + icon('clock') + esc(fmtWhen(next.start, next.end).replace(/^.*?）/, '')) + '</p>' +
         (next.location ? '<p>' + icon('pin') + esc(next.location) + '</p>' : '') +
