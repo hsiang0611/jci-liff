@@ -563,6 +563,11 @@ input[type=radio], input[type=checkbox] { width: 20px; height: 20px; accent-colo
 .names .is-unbound { color: var(--muted); }
 
 /* ── 報到 QR ── */
+.qr-head { margin: 0 40px 14px 0; }
+.qr-label { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 700; color: var(--harbor); letter-spacing: .06em; }
+.qr-label .ic { width: 18px; height: 18px; }
+.qr-title { font-size: 28px; line-height: 1.3; font-weight: 700; margin: 6px 0 4px; letter-spacing: .02em; color: var(--ink); }
+.qr-when { font-size: 16px; color: var(--ink-2); line-height: 1.5; }
 .qr-box { background: #fff; border-radius: var(--r); padding: 14px; margin: 0 auto 10px; width: min(100%, 300px); aspect-ratio: 1; display: grid; place-items: center; border: 1px solid var(--line); }
 .qr-box svg { width: 100%; height: 100%; display: block; }
 .qr-code { text-align: center; font-size: 15px; color: var(--ink-2); margin-bottom: 4px; }
