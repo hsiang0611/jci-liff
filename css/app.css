@@ -222,13 +222,19 @@ h1, h2, h3, p { margin: 0; }
 .erow:active, .nrow:active, .mrow:active { background: #F7F9FB; }
 .erow-date { flex: none; width: 44px; text-align: center; display: flex; flex-direction: column; color: var(--harbor-deep); }
 .erow-date b { font-family: var(--num); font-size: 30px; line-height: 1; font-weight: 700; }
-.erow-date span { font-size: 12px; margin-top: 4px; color: var(--muted); }
+.erow-date .erow-m { font-size: 12px; font-weight: 600; line-height: 1; margin-bottom: 4px; }
+.erow-date .erow-w { font-size: 12px; margin-top: 4px; color: var(--muted); }
+/* 週末：整個日期區塊上色（月、日、星期） */
+.erow-date.is-sat, .next-date.is-sat { color: #17794F; }
+.erow-date.is-sun, .next-date.is-sun { color: #C62828; }
+.erow-date.is-sat .erow-w, .erow-date.is-sun .erow-w { color: inherit; font-weight: 600; }
 .erow-body { flex: 1; min-width: 0; }
 .erow-title { font-size: 16px; font-weight: 600; line-height: 1.45; margin-top: 2px; }
 .erow-meta { font-size: 13.5px; color: var(--ink-2); margin-top: 2px; }
 .erow-state { margin-top: 6px; }
 .erow-state:empty { display: none; }
-.erow.is-past .erow-date, .erow.is-past .erow-title { color: var(--muted); }
+.erow.is-past .erow-title { color: var(--muted); }
+.erow.is-past .erow-date { opacity: .55; }
 .erow.is-cancelled .erow-title { text-decoration: line-through; color: var(--muted); }
 
 .nrow { display: block; padding: 14px 16px; color: inherit; }
