@@ -12,7 +12,7 @@
   var CFG = window.APP_CONFIG || {};
 
   /** 版本：每次更新前端時改這裡，並同步改後端 Schema.gs 的 APP_VERSION 與 index.html 的 ?v= */
-  var APP_VERSION = '2026.10.23';
+  var APP_VERSION = '2026.10.23.2';
   window.APP_VERSION = APP_VERSION;
 
   /**
@@ -155,18 +155,60 @@
     var x = String(a.name || ''), y = String(b.name || '');
     return nameCollator ? nameCollator.compare(x, y) : x.localeCompare(y);
   }
-  /** 先依角色等級（高到低），同等級再依姓名筆畫 */
+  /** 先依角色等級（高到低），同等級照權限表的角色順序，再依姓名筆畫 */
   function byLevelThenName(a, b) {
-    return ((b.level || 0) - (a.level || 0)) || byName(a, b);
+    return ((b.level || 0) - (a.level || 0)) || (roleRank(a.role) - roleRank(b.role)) || byName(a, b);
+  }
+  function roleRank(name) {
+    for (var i = S.roles.length - 1; i >= 0; i--) if (S.roles[i].role === name) return S.roles.length - 1 - i;
+    return S.roles.length;
   }
 
   function roleLevel(name) {
     for (var i = 0; i < S.roles.length; i++) if (S.roles[i].role === name) return S.roles[i].level;
     return 0;
   }
-  function audienceLabel(role) {
-    return roleLevel(role) === 0 ? '公開' : role + '以上';
+  /** 角色由高到低（同等級照權限表順序） */
+  function rolesDesc() { return S.roles.slice().reverse(); }
+  /** 同一個等級的角色名稱，例如 理事、監事 */
+  function levelNames(level) {
+    return rolesDesc().filter(function (r) { return r.level === level; }).map(function (r) { return r.role; });
   }
+  /** 可見對象顯示文字：公開／理事、監事以上／最高等級不加「以上」 */
+  function levelLabel(level) {
+    if (!level) return '公開';
+    var top = S.roles.some(function (r) { return r.level > level; });
+    return levelNames(level).join('、') + (top ? '以上' : '');
+  }
+  function audienceLabel(role) {
+    var lv = roleLevel(role);
+    return lv === 0 ? '公開' : levelLabel(lv);
+  }
+  /** 依等級分組的下拉選項（同等級只出現一次）：value 用選中的角色或該等級第一個角色 */
+  function levelOptions(list, selected, labelFn) {
+    var seen = {}, out = [];
+    list.forEach(function (r) {
+      if (seen[r.level]) return;
+      seen[r.level] = true;
+      var names = levelNames(r.level);
+      var hit = names.indexOf(selected) >= 0;
+      out.push('<option value="' + esc(hit ? selected : names[0]) + '"' + (hit ? ' selected' : '') + '>' + esc(labelFn(r.level)) + '</option>');
+    });
+    return out.join('');
+  }
+  function roleInfo(name) {
+    for (var i = 0; i < S.roles.length; i++) if (S.roles[i].role === name) return S.roles[i];
+    return null;
+  }
+  function isOfficerRole(name) { var r = roleInfo(name); return !!(r && r.officer); }
+  /** 幹部名單用的職稱：自訂職稱優先，沒有就用幹部角色名稱；不是幹部回傳空字串（與後端 officerTitle_ 相同） */
+  function officerTitleOf(m) {
+    var t = m.title || '', tr = roleInfo(t);
+    if (t && (!tr || tr.officer)) return t;
+    return isOfficerRole(m.role) ? m.role : '';
+  }
+  /** 角色已經顯示時，職稱跟角色一樣就不重複 */
+  function extraTitle(title, role) { return title && title !== role ? title : ''; }
   function perm(k) { return !!(S.me && S.me.perms && S.me.perms[k]); }
   /** 有推播權限、且後端已連接 LINE 官方帳號 */
   function canPush() { return perm('push') && S.pushReady; }
@@ -300,7 +342,9 @@
     S.updateNeeded = !!d.version && cmpVer(d.version, APP_VERSION) > 0;
     S.backendOld = cmpVer(d.version || '0', APP_VERSION) < 0;
     S.me = d.me;
-    S.roles = (d.roles || []).slice().sort(function (a, b) { return a.level - b.level; });
+    // 由低到高；同等級時反過來，這樣 .reverse() 就是後端（權限表）的順序
+    S.roles = (d.roles || []).map(function (r, i) { return Object.assign({ _i: i }, r); })
+      .sort(function (a, b) { return (a.level - b.level) || (b._i - a._i); });
     S.events = d.events || [];
     S.news = d.news || [];
     S.categories = d.categories || S.categories;
@@ -450,7 +494,7 @@
       var m = me.member;
       return '<section class="mcard" aria-label="會員證">' + contours() + org +
         '<div class="mcard-name">' + esc(m.name) + '</div>' +
-        '<div class="mcard-sub">' + esc([m.title, m.company].filter(Boolean).join('　')) + '</div>' +
+        '<div class="mcard-sub">' + esc([extraTitle(m.title, me.role), m.company].filter(Boolean).join('　')) + '</div>' +
         (m.joinYear ? '<dl class="mcard-meta"><div><dt>入會</dt><dd>' + esc(m.joinYear) + '</dd></div></dl>' : '') + '</section>';
     }
     var body;
@@ -679,10 +723,9 @@
 
   function audienceOptions(selected) {
     var myLevel = S.me.level;
-    return S.roles.filter(function (r) { return r.level <= myLevel; }).map(function (r) {
-      var label = r.level === 0 ? '公開（所有人都看得到）' : r.role + '以上';
-      return '<option value="' + esc(r.role) + '"' + (r.role === selected ? ' selected' : '') + '>' + esc(label) + '</option>';
-    }).join('');
+    return levelOptions(S.roles.filter(function (r) { return r.level <= myLevel; }), selected, function (lv) {
+      return lv === 0 ? '公開（所有人都看得到）' : levelLabel(lv);
+    });
   }
   function catOptions(list, selected) {
     if (selected && list.indexOf(selected) < 0) list = [selected].concat(list); // 類別已從清單移除，編輯時保留原值
@@ -905,8 +948,7 @@
     if (!list.length) return empty('找不到符合的會員', '換個關鍵字或行業試試。');
     // 同一個角色的人放在同一組；組的順序依「權限」表：等級高的在前，同等級照表上的列順序
     var rank = {};
-    S.roles.slice().sort(function (a, b) { return b.level - a.level; })
-      .forEach(function (r, i) { rank[r.role] = i; });
+    rolesDesc().forEach(function (r, i) { rank[r.role] = i; });
     var byRole = {}, groups = [];
     list.forEach(function (m) {
       if (!byRole[m.role]) { byRole[m.role] = { role: m.role, items: [] }; groups.push(byRole[m.role]); }
@@ -921,7 +963,7 @@
     return groups.map(function (g) {
       return '<h3 class="month">' + esc(g.role) + '<small>' + g.items.length + ' 位</small></h3><div class="rows">' + g.items.map(function (m) {
         return '<details class="drow"><summary><span class="avatar avatar-txt">' + esc(m.name.charAt(0)) + '</span><div class="drow-main"><b>' + esc(m.name) + '</b>' +
-          '<span>' + esc([m.title, m.company].filter(Boolean).join('　')) + '</span></div>' +
+          '<span>' + esc([extraTitle(m.title, m.role), m.company].filter(Boolean).join('　')) + '</span></div>' +
           (m.phone ? '<a class="iconbtn" href="tel:' + esc(m.phone) + '" aria-label="打電話給' + esc(m.name) + '">' + icon('phone') + '</a>' : '') + '</summary>' +
           '<dl class="drow-more">' + (m.phone ? '<div><dt>手機</dt><dd><a href="tel:' + esc(m.phone) + '">' + esc(m.phone) + '</a></dd></div>'
             : m.phoneHidden ? '<div><dt>手機</dt><dd class="muted">未公開（本人未同意顯示）</dd></div>' : '') +
@@ -990,7 +1032,7 @@
     var me = S.me;
     var html = topbar() + '<main class="view"><h1 class="page-title">我的</h1>';
     html += '<section class="profile">' + avatar(me, 56) + '<div><b>' + esc(me.member ? me.member.name : me.lineName) + '</b>' +
-      '<span>' + esc(me.role) + (me.member && me.member.title ? '　' + esc(me.member.title) : '') + '</span>' +
+      '<span>' + esc(me.role) + (me.member && extraTitle(me.member.title, me.role) ? '　' + esc(me.member.title) : '') + '</span>' +
       (me.member ? '<span class="muted">LINE：' + esc(me.lineName) + '</span>' : '') + '</div></section>';
     html += bindSection();
     if (me.member) html += progressSection(me) + profileSection(me) + duesSection(me) + shopSection(me);
@@ -1088,7 +1130,8 @@
     html += '<div id="quota" class="quota">' + quotaHtml(p.preview) + '</div>';
     html += '<section class="step"><h2><span class="step-n">1</span>發給誰</h2><div class="choices">' +
       radio('all', '全體已綁定會員', '') +
-      radio('roles', '指定角色', '') + '<div class="choice-more" data-show="roles"><div class="chips">' + roleChips + '</div></div>' +
+      radio('roles', '指定角色', '') + '<div class="choice-more" data-show="roles"><div class="chips">' + roleChips + '</div>' +
+        (S.roles.some(function (r) { return r.officer; }) ? '<button type="button" class="linkbtn chips-all" data-act="pickOfficers">' + icon('check') + '勾選所有幹部</button>' : '') + '</div>' +
       radio('event', '活動報名者', '') + '<div class="choice-more" data-show="event"><select name="eventId" aria-label="活動">' + evOpts + '</select></div>' +
       radio('eventUnreplied', '活動未回覆者', '限會員以上的活動，提醒還沒回覆出席或請假的人') + '<div class="choice-more" data-show="eventUnreplied"><select name="eventId2" aria-label="活動">' + evOpts + '</select></div>' +
       (openPolls.length ? radio('pollUnvoted', '調查未填寫者', '提醒還沒填寫調查的會員') + '<div class="choice-more" data-show="pollUnvoted"><select name="pollId" aria-label="調查">' + pollOpts + '</select></div>' : '') +
@@ -1421,7 +1464,7 @@
 
   function officerList(items) {
     return '<ul class="officers">' + items.map(function (o) {
-      return '<li><span class="off-title">' + esc(o.title) + '</span><b>' + esc(o.name) + '</b></li>';
+      return '<li><span class="off-title">' + esc(o.title || o.role) + '</span><b>' + esc(o.name) + '</b></li>';
     }).join('') + '</ul>';
   }
 
@@ -1433,18 +1476,12 @@
     if (!d) return html + skeleton(5) + '</main>';
     if (d.__error) return html + errorBlock(d.__error) + '</main>';
     html += '<h3 class="month">本屆幹部<small>' + d.current.length + ' 位</small></h3>' +
-      (d.current.length ? officerList(d.current) : '<p class="muted">會員名冊還沒有填職稱。</p>');
+      (d.current.length ? officerList(d.current) : '<p class="muted">名冊上還沒有幹部（角色是會長、理事等，或有填職稱的人）。</p>');
     d.terms.forEach(function (t) {
       html += '<h3 class="month">' + esc(t.term) + (/^\d{4}$/.test(t.term) ? ' 年度' : '') + '<small>' + t.list.length + ' 位</small></h3>' + officerList(t.list);
     });
     if (!d.terms.length) html += '<p class="hint" style="margin-top:14px">每年交接時把卸任幹部存檔，這裡就會留下歷屆名單。</p>';
     return html + '</main>';
-  }
-
-  function roleNameSet() {
-    var o = {};
-    S.roles.forEach(function (r) { o[r.role] = 1; });
-    return o;
   }
 
   function viewHandover() {
@@ -1453,9 +1490,8 @@
     var html = topbar({ back: 'me', title: '年度交接' }) + '<main class="view">';
     if (!list) return html + skeleton(6) + '</main>';
     if (list.__error) return html + errorBlock(list.__error) + '</main>';
-    var names = roleNameSet();
     var active = list.filter(function (m) { return m.status !== '停用'; }).slice().sort(byLevelThenName);
-    var officers = active.filter(function (m) { return m.title && !names[m.title]; });
+    var officers = active.filter(function (m) { return !!officerTitleOf(m); });
     var now = new Date();
     var term = now.getMonth() >= 6 ? now.getFullYear() : now.getFullYear() - 1;
     var myId = S.me.member && S.me.member.id;
@@ -1470,16 +1506,16 @@
     html += '<section class="step"><h2><span class="step-n">1</span>存檔卸任幹部</h2>' +
       field('卸任年度', '<input id="h-term" name="term" maxlength="20" required value="' + term + '">', '同一年度重複存檔會覆蓋原本的紀錄，不會重複', 'h-term') +
       (officers.length ? '<div class="choices">' + officers.map(function (m) {
-        return '<label class="choice"><input type="checkbox" name="archive" value="' + esc(m.id) + '" checked><span><b>' + esc(m.title) + '　' + esc(m.name) + '</b><small>' + esc(m.role) + '</small></span></label>';
-      }).join('') + '</div>' : '<p class="muted">名冊上目前沒有人填職稱。</p>') + '</section>';
+        return '<label class="choice"><input type="checkbox" name="archive" value="' + esc(m.id) + '" checked><span><b>' + esc(officerTitleOf(m)) + '　' + esc(m.name) + '</b><small>' + esc(m.role) + '</small></span></label>';
+      }).join('') + '</div>' : '<p class="muted">名冊上目前沒有幹部。</p>') + '</section>';
     html += '<section class="step"><h2><span class="step-n">2</span>新年度職務</h2>' +
-      '<p class="hint">直接修改角色與職稱，沒改的人不會變動；職稱留空代表沒有職務。你自己的角色不能在這裡修改。</p>' +
-      (officers.length ? '<div class="ho-tools"><button type="button" class="btn btn-ghost btn-small" data-act="hoClear">清空上面勾選幹部的職稱</button></div>' : '') +
+      '<p class="hint">直接修改角色與職稱，沒改的人不會變動。卸任的人把角色改回「會員」、職稱留空，就不會再列在本屆幹部。你自己的角色不能在這裡修改。</p>' +
+      (officers.length ? '<div class="ho-tools"><button type="button" class="btn btn-ghost btn-small" data-act="hoClear">勾選的卸任幹部：角色改回會員、清空職稱</button></div>' : '') +
       '<div class="search">' + icon('search') + '<input type="search" data-filter="ho" placeholder="搜尋姓名" aria-label="搜尋會員"></div>' +
       '<div class="ho-list">' + active.map(function (m) {
         var locked = m.level > S.me.level;
         return '<div class="ho-row" data-ho="' + esc(m.id) + '" data-name="' + esc(m.name) + '"><div class="ho-who"><b>' + esc(m.name) + '</b><span>' +
-          esc(m.role + (m.title ? '　' + m.title : '')) + '</span></div><div class="ho-inputs">' +
+          esc(m.role + (extraTitle(m.title, m.role) ? '　' + m.title : '')) + '</span></div><div class="ho-inputs">' +
           '<select name="role:' + esc(m.id) + '" aria-label="' + esc(m.name) + ' 的角色"' + (m.id === myId || locked ? ' disabled' : '') + '>' + roleOpts(m.role) + '</select>' +
           '<input name="title:' + esc(m.id) + '" maxlength="40" value="' + esc(m.title) + '" placeholder="職稱" aria-label="' + esc(m.name) + ' 的職稱"' + (locked ? ' disabled' : '') + '></div></div>';
       }).join('') + '</div></section>';
@@ -1584,9 +1620,8 @@
     var p = isNew ? { multi: true, audience: '', options: [], voters: 0 } : (S.cache['poll:' + r.a] || S.polls.filter(function (x) { return x.id === r.a; })[0]);
     if (!p || p.__error) return topbar({ back: 'polls', title: '編輯調查' }) + '<main class="view">' + empty('找不到這份調查', '') + '</main>';
     var levels = S.roles.filter(function (x) { return x.level > 0 && x.level <= S.me.level; });
-    var audOpts = '<option value="">全體會員</option>' + levels.slice(1).map(function (x) {
-      return '<option value="' + esc(x.role) + '"' + (x.role === p.audience ? ' selected' : '') + '>' + esc(x.role) + '以上</option>';
-    }).join('');
+    var lowest = levels.length ? levels[0].level : 0;
+    var audOpts = '<option value="">全體會員</option>' + levelOptions(levels.filter(function (x) { return x.level > lowest; }), p.audience, levelLabel);
     return topbar({ back: isNew ? 'polls' : 'poll/' + p.id, title: isNew ? '新增調查' : '編輯調查' }) +
       '<main class="view"><form class="form" data-form="poll" novalidate><input type="hidden" name="id" value="' + esc(p.id || '') + '">' +
       field('標題', '<input id="v-title" name="title" required maxlength="60" value="' + esc(p.title || '') + '" placeholder="例如：十二月聯誼晚會日期">', '', 'v-title') +
@@ -1608,7 +1643,7 @@
 
   function shopCard(m) {
     var s = m.shop;
-    var meta = [m.title, m.industry].filter(Boolean).map(esc).join(' · ');
+    var meta = [m.title || (isOfficerRole(m.role) ? m.role : ''), m.industry].filter(Boolean).map(esc).join(' · ');
     return '<article class="card shop"><h3 class="shop-name">' + esc(s.name) + '</h3>' +
       '<div class="shop-owner"><span class="avatar avatar-txt" aria-hidden="true">' + esc(m.name.charAt(0)) + '</span>' +
       '<p><b>' + esc(m.name) + '</b>' + (meta ? '<span>' + meta + '</span>' : '') + '</p></div>' +
@@ -1835,7 +1870,7 @@
     if (!list.length) return empty(f === 'unpaid' ? '大家都繳了' : '沒有符合的會員', '');
     return '<div class="rows">' + list.map(function (m) {
       return '<button type="button" class="mrow" data-act="duesEdit" data-id="' + esc(m.id) + '" data-year="' + d.year + '">' +
-        '<div class="mrow-main"><b>' + esc(m.name) + '</b><span class="dues-sub">' + esc([m.role, m.title].filter(Boolean).join('　')) + '</span></div>' +
+        '<div class="mrow-main"><b>' + esc(m.name) + '</b><span class="dues-sub">' + esc([m.role, extraTitle(m.title, m.role)].filter(Boolean).join('　')) + '</span></div>' +
         '<div class="mrow-side">' + (m.paid ? '<span class="pill is-ok">已繳</span><span class="bound">' + esc(fmtMD(m.paid.paidAt)) + (m.paid.amount ? ' ' + money(m.paid.amount) : '') + '</span>'
           : '<span class="pill is-alert">未繳</span>' + (m.amount ? '<span class="bound">' + money(m.amount) + '</span>' : '')) + '</div></button>';
     }).join('') + '</div>';
@@ -2142,7 +2177,7 @@
     var list = cands.filter(function (m) { return !q || (m.name + m.role + m.company).toLowerCase().indexOf(q) >= 0; }).slice(0, 40);
     if (!list.length) return '<p class="muted" style="padding:14px">沒有符合的會員</p>';
     return list.map(function (m) {
-      return '<button type="button" class="menu-item" data-act="walkinPick" data-id="' + esc(m.id) + '"><span class="avatar avatar-txt">' + esc(m.name.charAt(0)) + '</span><div><b>' + esc(m.name) + '</b><span>' + esc(m.role + (m.title ? '　' + m.title : '')) + '</span></div>' + icon('plus', 'chev') + '</button>';
+      return '<button type="button" class="menu-item" data-act="walkinPick" data-id="' + esc(m.id) + '"><span class="avatar avatar-txt">' + esc(m.name.charAt(0)) + '</span><div><b>' + esc(m.name) + '</b><span>' + esc(m.role + (extraTitle(m.title, m.role) ? '　' + m.title : '')) + '</span></div>' + icon('plus', 'chev') + '</button>';
     }).join('');
   }
 
@@ -2607,14 +2642,23 @@
       if (el.hasAttribute('data-q')) { S.dirQuery = el.getAttribute('data-q'); S.dirIndustry = ''; }
       render();
     },
+    pickOfficers: function (el) {
+      var form = el.closest('form');
+      form.querySelectorAll('input[name="roles"]').forEach(function (cb) { if (isOfficerRole(cb.value)) cb.checked = true; });
+      readPushForm(form);
+      refreshPushPreview();
+    },
     hoClear: function (el) {
       var form = el.closest('form');
+      var base = roleInfo('會員') ? '會員' : '';
       form.querySelectorAll('input[name="archive"]:checked').forEach(function (cb) {
         var t = form.querySelector('input[name="title:' + cb.value + '"]');
         if (t && !t.disabled) t.value = '';
+        var r = form.querySelector('select[name="role:' + cb.value + '"]');
+        if (base && r && !r.disabled && isOfficerRole(r.value)) r.value = base;
       });
       hoSummary(form);
-      toast('已清空，請填上新年度的職稱');
+      toast('已改回會員，請設定新年度幹部的角色與職稱');
     },
     pollStatus: function (el) {
       var id = el.getAttribute('data-id'), open = el.getAttribute('data-open') === '1';

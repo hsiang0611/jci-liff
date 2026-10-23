@@ -12,8 +12,15 @@ window.Mock = (function () {
     return { directory: d, eventManage: e, newsManage: n, viewRegs: r, push: p, memberManage: m, duesManage: f };
   };
   var ROLES = [
-    { role: '管理員', level: 90, desc: '會長、秘書長、秘書處', perms: P(1, 1, 1, 1, 1, 1, 1) },
-    { role: '幹部', level: 70, desc: '副會長、理監事、主委', perms: P(1, 1, 1, 1, 0, 0, 0) },
+    { role: '會長', level: 90, desc: '可管理一切並發送推播', perms: P(1, 1, 1, 1, 1, 1, 1) },
+    { role: '秘書長', level: 90, desc: '會務總管：可管理會員、活動、消息、會費並發送推播', perms: P(1, 1, 1, 1, 1, 1, 1) },
+    { role: '管理員', level: 90, desc: '秘書處、系統管理者（不算幹部）', perms: P(1, 1, 1, 1, 1, 1, 1) },
+    { role: '財務長', level: 80, desc: '登錄會費；可發布活動與消息、看報名名單', perms: P(1, 1, 1, 1, 0, 0, 1) },
+    { role: '副會長', level: 80, desc: '可發布活動與消息、看報名名單', perms: P(1, 1, 1, 1, 0, 0, 0) },
+    { role: '理事', level: 75, desc: '可發布活動與消息、看報名名單', perms: P(1, 1, 1, 1, 0, 0, 0) },
+    { role: '監事', level: 75, desc: '可發布活動與消息、看報名名單', perms: P(1, 1, 1, 1, 0, 0, 0) },
+    { role: '法制顧問', level: 70, desc: '可發布活動與消息、看報名名單', perms: P(1, 1, 1, 1, 0, 0, 0) },
+    { role: '幹部', level: 70, desc: '主委等其他幹部', perms: P(1, 1, 1, 1, 0, 0, 0) },
     { role: '會員', level: 50, desc: '正式會員', perms: P(1, 0, 0, 0, 0, 0, 0) },
     { role: '特友', level: 40, desc: '特友會', perms: P(1, 0, 0, 0, 0, 0, 0) },
     { role: '預備會員', level: 20, desc: '新朋友、輔導入會中', perms: P(0, 0, 0, 0, 0, 0, 0) },
@@ -22,10 +29,23 @@ window.Mock = (function () {
   ROLES.forEach(function (r) { for (var k in r.perms) r.perms[k] = !!r.perms[k]; });
   var BY = {};
   ROLES.forEach(function (r) { BY[r.role] = r; });
+  // 算不算幹部：等級在「幹部」以上，管理員除外（與後端 loadRoles_ 相同）
+  ROLES.forEach(function (r) { r.officer = r.role !== '管理員' && r.level > 0 && r.level >= BY['幹部'].level; });
+  /** 幹部名單用的職稱（與後端 officerTitle_ 相同） */
+  function officerTitle(m) {
+    var t = m.title || '', tr = BY[t];
+    if (t && (!tr || tr.officer)) return t;
+    return BY[m.role] && BY[m.role].officer ? m.role : '';
+  }
+  function levelLabel(lv) {
+    var names = ROLES.filter(function (r) { return r.level === lv; }).map(function (r) { return r.role; });
+    return names.join('、') + (ROLES.some(function (r) { return r.level > lv; }) ? '以上' : '');
+  }
 
   var IDENTITY = {
-    '管理員': { uid: 'U-demo-01', name: 'Chien-Hung' },
-    '幹部': { uid: 'U-demo-04', name: '宜蓁 Ivy' },
+    '會長': { uid: 'U-demo-01', name: 'Chien-Hung' },
+    '財務長': { uid: 'U-demo-12', name: '書豪' },
+    '理事': { uid: 'U-demo-04', name: '宜蓁 Ivy' },
     '會員': { uid: 'U-demo-05', name: '志豪' },
     '特友': { uid: 'U-demo-07', name: '國明' },
     '預備會員': { uid: 'U-demo-08', name: 'Tina' },
@@ -49,10 +69,10 @@ window.Mock = (function () {
     { role: '預備會員', name: '公益服務', categories: ['公益服務'], need: 1, desc: '參加公益服務 1 次' },
     { role: '預備會員', name: '訓練課程', categories: ['訓練'], need: 1, desc: '參加訓練 1 次' }
   ];
-  var TITLE_ORDER = ['會長', '直前會長', '副會長', '秘書長', '副秘書長', '財務長', '常務理事', '理事', '常務監事', '監事', '執行長', '主任委員', '主委', '副主委', '委員', '顧問', '特友會長'];
+  var TITLE_ORDER = ['會長', '直前會長', '秘書長', '副秘書長', '財務長', '副財務長', '副會長', '常務理事', '理事', '常務監事', '監事會召集人', '監事', '法制顧問', '法律顧問', '執行長', '主任委員', '主委', '副主委', '委員', '顧問', '特友會長'];
   var INDUSTRIES = ['營造工程', '製造業', '餐飲', '零售批發', '金融保險', '不動產', '醫療保健', '教育', '資訊科技', '設計行銷', '運輸物流', '農林漁牧', '法律會計', '服務業', '其他'];
 
-  var db, current = '管理員', friend = {};
+  var db, current = '會長', friend = {};
 
   var CN = ['', '一', '二', '三', '四', '五', '六', '七', '八', '九', '十', '十一', '十二'];
   function monthOf(days) { return CN[new Date(Date.now() + days * DAY).getMonth() + 1]; }
@@ -87,12 +107,15 @@ window.Mock = (function () {
     var md = function (d) { return '1990-' + (thisMonth < 10 ? '0' : '') + thisMonth + '-' + (d < 10 ? '0' : '') + d; };
     db = {
       members: [
-        m('M001', '王建宏', '0912000001', '管理員', '會長', '建宏營造有限公司', '2016', 'U-demo-01', '營造工程', '1988-03-12'),
-        m('M002', '陳怡君', '0912000002', '管理員', '秘書長', '怡君會計師事務所', '2019', 'U-demo-02', '法律會計', md(new Date().getDate())),
-        m('M003', '李承翰', '0912000003', '幹部', '副會長', '承翰汽車美容', '2018', 'U-demo-03', '服務業', '1990-07-08'),
-        m('M004', '蔡宜蓁', '0912000004', '幹部', '理事', '蓁好烘焙坊', '2020', 'U-demo-04', '餐飲', md(21)),
+        m('M001', '王建宏', '0912000001', '會長', '會長', '建宏營造有限公司', '2016', 'U-demo-01', '營造工程', '1988-03-12'),
+        m('M002', '陳怡君', '0912000002', '秘書長', '秘書長', '怡君會計師事務所', '2019', 'U-demo-02', '法律會計', md(new Date().getDate())),
+        m('M012', '周書豪', '0912000012', '財務長', '財務長', '書豪記帳士事務所', '2019', 'U-demo-12', '法律會計', '1989-08-18'),
+        m('M003', '李承翰', '0912000003', '副會長', '副會長', '承翰汽車美容', '2018', 'U-demo-03', '服務業', '1990-07-08'),
+        m('M004', '蔡宜蓁', '0912000004', '理事', '理事', '蓁好烘焙坊', '2020', 'U-demo-04', '餐飲', md(21)),
+        m('M013', '楊淑芬', '0912000013', '監事', '常務監事', '淑芬中醫診所', '2017', '', '醫療保健', ''),
+        m('M014', '何承恩', '0912000014', '法制顧問', '法制顧問', '承恩法律事務所', '2015', '', '法律會計', '1986-02-14'),
         m('M005', '林志豪', '0912000005', '會員', '', '志豪水電行', '2022', 'U-demo-05', '營造工程', '1993-11-20'),
-        m('M006', '吳佩珊', '0912000006', '會員', '公關主委', '珊珊花藝', '2023', 'U-demo-06', '零售批發', md(5)),
+        m('M006', '吳佩珊', '0912000006', '幹部', '公關主委', '珊珊花藝', '2023', 'U-demo-06', '零售批發', md(5)),
         m('M007', '黃國明', '0912000007', '特友', '特友會長', '國明茶行', '2008', 'U-demo-07', '零售批發', '1975-05-30'),
         m('M008', '張雅婷', '0912000008', '預備會員', '', '雅婷設計工作室', '2026', 'U-demo-08', '設計行銷', ''),
         m('M009', '鄭凱文', '0912000009', '會員', '', '凱文咖啡', '2024', '', '餐飲', '1995-01-05'),
@@ -100,8 +123,8 @@ window.Mock = (function () {
         m('M011', '許文彥', '0912000011', '特友', '', '文彥土地代書', '2009', 'U-demo-11', '不動產', '1979-09-09')
       ],
       officers: [
-        ['2025', '黃國明', '特友', '會長'], ['2025', '王建宏', '管理員', '副會長'], ['2025', '陳怡君', '管理員', '秘書長'], ['2025', '李承翰', '幹部', '財務長'], ['2025', '許文彥', '特友', '監事'],
-        ['2024', '許文彥', '特友', '會長'], ['2024', '黃國明', '特友', '直前會長'], ['2024', '王建宏', '管理員', '秘書長'], ['2024', '蔡宜蓁', '幹部', '公關主委']
+        ['2025', '黃國明', '特友', '會長'], ['2025', '王建宏', '副會長', '副會長'], ['2025', '陳怡君', '秘書長', '秘書長'], ['2025', '李承翰', '財務長', '財務長'], ['2025', '許文彥', '特友', '監事'],
+        ['2024', '許文彥', '特友', '會長'], ['2024', '黃國明', '特友', '直前會長'], ['2024', '王建宏', '秘書長', '秘書長'], ['2024', '蔡宜蓁', '幹部', '公關主委']
       ].map(function (r) { return { term: r[0], name: r[1], role: r[2], title: r[3], memberId: '' }; }),
       scheduled: [
         { id: 'S1', sendAt: at(4, 9), audienceLabel: '會員以上', audience: { mode: 'minRole', role: '會員' }, title: '例會提醒：後天晚上 7 點', text: '請記得穿會服，18:30 開始報到用餐。',
@@ -187,15 +210,16 @@ window.Mock = (function () {
     // 會費：今年部分已繳
     var cy = new Date().getFullYear();
     db.duesRules = [
-      { role: '管理員', amount: 6000, desc: '轉帳：土地銀行龍井分行 012-345-678901，戶名：龍井國際青年商會。轉帳後請告知財務長末五碼。' },
-      { role: '幹部', amount: 6000, desc: '' }, { role: '會員', amount: 6000, desc: '' }, { role: '特友', amount: 3000, desc: '' }
-    ];
+      { role: '會長', amount: 6000, desc: '轉帳：土地銀行龍井分行 012-345-678901，戶名：龍井國際青年商會。轉帳後請告知財務長末五碼。' }
+    ].concat(['秘書長', '管理員', '財務長', '副會長', '理事', '監事', '法制顧問', '幹部', '會員'].map(function (r) { return { role: r, amount: 6000, desc: '' }; }), [
+      { role: '特友', amount: 3000, desc: '' }
+    ]);
     db.dues = [
-      { year: cy, memberId: 'M001', name: '王建宏', amount: 6000, paidAt: at(-260, 10), method: '轉帳', note: '', recordedBy: '李承翰' },
-      { year: cy, memberId: 'M002', name: '陳怡君', amount: 6000, paidAt: at(-255, 10), method: '轉帳', note: '', recordedBy: '李承翰' },
-      { year: cy, memberId: 'M003', name: '李承翰', amount: 6000, paidAt: at(-250, 10), method: '現金', note: '例會現場', recordedBy: '李承翰' },
-      { year: cy, memberId: 'M006', name: '吳佩珊', amount: 6000, paidAt: at(-200, 10), method: '轉帳', note: '', recordedBy: '李承翰' },
-      { year: cy, memberId: 'M007', name: '黃國明', amount: 3000, paidAt: at(-240, 10), method: '現金', note: '', recordedBy: '李承翰' }
+      { year: cy, memberId: 'M001', name: '王建宏', amount: 6000, paidAt: at(-260, 10), method: '轉帳', note: '', recordedBy: '周書豪' },
+      { year: cy, memberId: 'M002', name: '陳怡君', amount: 6000, paidAt: at(-255, 10), method: '轉帳', note: '', recordedBy: '周書豪' },
+      { year: cy, memberId: 'M003', name: '李承翰', amount: 6000, paidAt: at(-250, 10), method: '現金', note: '例會現場', recordedBy: '周書豪' },
+      { year: cy, memberId: 'M006', name: '吳佩珊', amount: 6000, paidAt: at(-200, 10), method: '轉帳', note: '', recordedBy: '周書豪' },
+      { year: cy, memberId: 'M007', name: '黃國明', amount: 3000, paidAt: at(-240, 10), method: '現金', note: '', recordedBy: '周書豪' }
     ];
     db.audit = [
       { time: at(-3, 21, 40), actor: '陳怡君', action: '修改會員', target: '吳佩珊（M006）', detail: '職稱 （空白） → 公關主委' },
@@ -570,7 +594,7 @@ window.Mock = (function () {
     } else if (mode === 'minRole') {
       var min = audLevel(aud.role);
       mem.forEach(function (m) { var r = BY[m.role]; if (r && r.level >= min && r.level > 0) add(m.lineUid); });
-      label = min > 0 ? aud.role + '以上' : '全體已綁定會員';
+      label = min > 0 ? levelLabel(min) : '全體已綁定會員';
     } else {
       mem.forEach(function (m) { var r = BY[m.role]; if (r && r.level > 0) add(m.lineUid); });
       label = '全體已綁定會員';
@@ -615,7 +639,7 @@ window.Mock = (function () {
       var o = {
         version: window.APP_VERSION || '',
         me: meOut(c),
-        roles: ROLES.map(function (r) { return { role: r.role, level: r.level, desc: r.desc }; }),
+        roles: ROLES.map(function (r) { return { role: r.role, level: r.level, desc: r.desc, officer: r.officer }; }),
         events: visibleEvents(c), news: visibleNews(c),
         docs: visibleDocs(c),
         birthdays: c.perms.directory ? monthBirthdays() : [],
@@ -942,8 +966,8 @@ window.Mock = (function () {
       };
     },
     officers: function () {
-      var current = db.members.filter(function (m) { return m.status !== '停用' && m.title && !BY[m.title]; })
-        .map(function (m) { return { memberId: m.id, name: m.name, role: m.role, title: m.title }; });
+      var current = db.members.filter(function (m) { return m.status !== '停用' && officerTitle(m); })
+        .map(function (m) { return { memberId: m.id, name: m.name, role: m.role, title: officerTitle(m) }; });
       var terms = {};
       db.officers.forEach(function (r) { (terms[r.term] = terms[r.term] || []).push(clone(r)); });
       return { current: sortOfficers(current), terms: Object.keys(terms).sort(function (a, b) { return b.localeCompare(a); }).map(function (t) { return { term: t, list: sortOfficers(terms[t]) }; }) };
@@ -973,7 +997,7 @@ window.Mock = (function () {
         var m = membersById(id);
         if (!m) return;
         db.officers = db.officers.filter(function (r) { return !(r.term === term && r.memberId === id); });
-        db.officers.push({ term: term, memberId: id, name: m.name, role: m.role, title: m.title });
+        db.officers.push({ term: term, memberId: id, name: m.name, role: m.role, title: officerTitle(m) || m.title });
         n++;
       });
       patches.forEach(function (p) { Object.assign(p[0], p[1]); });
