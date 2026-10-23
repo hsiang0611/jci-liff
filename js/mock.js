@@ -126,7 +126,14 @@ window.Mock = (function () {
       officers: [
         ['2025', '黃國明', '特友', '會長'], ['2025', '王建宏', '副會長', '副會長'], ['2025', '陳怡君', '秘書長', '秘書長'], ['2025', '李承翰', '財務長', '財務長'], ['2025', '許文彥', '特友', '監事'],
         ['2024', '許文彥', '特友', '會長'], ['2024', '黃國明', '特友', '直前會長'], ['2024', '王建宏', '秘書長', '秘書長'], ['2024', '蔡宜蓁', '幹部', '公關主委']
-      ].map(function (r) { return { term: r[0], name: r[1], role: r[2], title: r[3], memberId: '' }; }),
+      ].map(function (r) { return { term: r[0], name: r[1], role: r[2], title: r[3], memberId: '', termNo: r[3] === '會長' ? String(Number(r[0]) - 1986) : '', note: '' }; }).concat([
+        // 歷屆會長、主席（示範：在試算表「歷屆幹部」補的早年資料）
+        ['民國76年', '李正雄', '創會會長', '1', '創會'], ['2016', '陳志明', '會長', '30', ''], ['2017', '林建宏', '會長', '31', ''], ['2018', '張家豪', '會長', '32', ''],
+        ['2019', '吳俊傑', '會長', '33', ''], ['2020', '劉冠宇', '會長', '34', '疫情線上交接'], ['2021', '蘇柏翰', '會長', '35', ''], ['2022', '鄭宇翔', '會長', '36', ''],
+        ['2023', '楊明哲', '會長', '37', ''],
+        ['2020', '趙信義', '主席', '', ''], ['2021', '錢文華', '主席', '', ''], ['2022', '孫立德', '主席', '', ''], ['2023', '許文彥', '主席', '', ''],
+        ['2024', '黃國明', '主席', '', ''], ['2025', '李承翰', '主席', '', '']
+      ].map(function (r) { return { term: r[0], name: r[1], role: '', title: r[2], memberId: '', termNo: r[3], note: r[4] }; })),
       scheduled: [
         { id: 'S1', sendAt: at(4, 9), audienceLabel: '會員以上', audience: { mode: 'minRole', role: '會員' }, title: '例會提醒：後天晚上 7 點', text: '請記得穿會服，18:30 開始報到用餐。',
           status: '待發送', sentAt: '', result: '', createdBy: '陳怡君', createdAt: at(-1, 15) },
@@ -379,6 +386,45 @@ window.Mock = (function () {
     var keys = TITLE_ORDER.slice().sort(function (a, b) { return b.length - a.length; });
     for (var i = 0; i < keys.length; i++) if (String(t || '').indexOf(keys[i]) >= 0) return TITLE_ORDER.indexOf(keys[i]);
     return TITLE_ORDER.length;
+  }
+  /* ── 歷屆會長、歷屆主席（與後端 honorsOut_ 相同） ── */
+  var HONOR_EXCLUDE = /^(直前|前任?|名譽|榮譽|歷屆)|副主席/;
+  function honorKind(title, current) {
+    var t = String(title || '').replace(/\s+/g, '');
+    if (!t || HONOR_EXCLUDE.test(t) || (current && /^創會/.test(t))) return '';
+    if (/^(第[0-9一二三四五六七八九十百]+屆|創會)?會長$/.test(t)) return 'president';
+    if (t.indexOf('主席') >= 0) return 'chair';
+    return '';
+  }
+  function honorYear(term) { var m = String(term || '').match(/\d+/); if (!m) return 0; var y = Number(m[0]); return y > 0 && y < 1911 ? y + 1911 : y; }
+  function honorKey(r) { return [r.term, r.name, r.title].join('|'); }
+  function firstNum(v) { var m = String(v || '').match(/\d+/); return m ? Number(m[0]) : 0; }
+  function honorsOut() {
+    var out = { president: [], chair: [] }, seen = {};
+    db.officers.forEach(function (r) {
+      var k = honorKind(r.title);
+      if (!k || !r.name || !r.term) return;
+      var dup = k + '|' + honorYear(r.term) + '|' + normName(r.name);
+      if (seen[dup]) return;
+      seen[dup] = true;
+      out[k].push({ key: honorKey(r), term: r.term, year: honorYear(r.term), termNo: r.termNo || '', name: r.name, title: r.title, note: r.note || '', current: false });
+    });
+    var thisYear = new Date().getFullYear();
+    db.members.forEach(function (m) {
+      if (m.status === '停用') return;
+      var title = officerTitle(m), k = honorKind(title, true);
+      if (!k) return;
+      var mine = out[k].filter(function (x) { return normName(x.name) === normName(m.name) && x.year >= thisYear; });
+      if (mine.length) { mine.forEach(function (x) { x.current = true; }); return; }
+      out[k].push({ key: '', term: '', year: 0, termNo: '', name: m.name, title: title, note: '', current: true });
+    });
+    Object.keys(out).forEach(function (k) {
+      out[k].sort(function (a, b) {
+        var ya = a.year || (a.current ? 99999 : 0), yb = b.year || (b.current ? 99999 : 0);
+        return (ya - yb) || (firstNum(a.termNo) - firstNum(b.termNo)) || a.name.localeCompare(b.name);
+      });
+    });
+    return out;
   }
   function sortOfficers(list) {
     list.forEach(function (x, i) { x._i = i; });
@@ -1034,7 +1080,37 @@ window.Mock = (function () {
         .map(function (m) { return { memberId: m.id, name: m.name, role: m.role, title: officerTitle(m) }; });
       var terms = {};
       db.officers.forEach(function (r) { (terms[r.term] = terms[r.term] || []).push(clone(r)); });
-      return { current: sortOfficers(current), terms: Object.keys(terms).sort(function (a, b) { return b.localeCompare(a); }).map(function (t) { return { term: t, list: sortOfficers(terms[t]) }; }) };
+      return { current: sortOfficers(current), terms: Object.keys(terms).sort(function (a, b) { return (honorYear(b) - honorYear(a)) || b.localeCompare(a); }).map(function (t) { return { term: t, list: sortOfficers(terms[t]) }; }), honors: honorsOut() };
+    },
+    saveHonor: function (c, d) {
+      var kind = d.kind === 'president' || d.kind === 'chair' ? d.kind : '';
+      if (!kind) throw err('INVALID', '請選擇歷屆會長或歷屆主席');
+      var term = String(d.term || '').trim().slice(0, 20), name = String(d.name || '').trim().slice(0, 30);
+      if (!honorYear(term)) throw err('INVALID', '請填年度，例如 2025 或 民國114年');
+      if (!normName(name)) throw err('INVALID', '請填姓名');
+      var title = String(d.title || '').trim().slice(0, 40) || (kind === 'president' ? '會長' : '主席');
+      if (honorKind(title) !== kind) throw err('INVALID', kind === 'president' ? '歷屆會長的職稱要是「會長」' : '歷屆主席的職稱要包含「主席」，例如：特友會主席');
+      var row = null;
+      if (d.key) {
+        row = db.officers.filter(function (r) { return honorKey(r) === d.key; })[0];
+        if (!row) throw err('NOT_FOUND', '找不到這筆紀錄，可能已經被修改，請重新整理');
+      }
+      var dupKey = kind + '|' + honorYear(term) + '|' + normName(name);
+      db.officers.forEach(function (r) {
+        if (r !== row && honorKind(r.title) + '|' + honorYear(r.term) + '|' + normName(r.name) === dupKey) throw err('INVALID', r.term + ' 已經有 ' + r.name + ' 的' + (kind === 'president' ? '會長' : '主席') + '紀錄');
+      });
+      var rec = { term: term, name: name, title: title, termNo: String(d.termNo || '').trim().slice(0, 10), note: String(d.note || '').trim().slice(0, 60) };
+      if (row) Object.assign(row, rec);
+      else db.officers.push(Object.assign({ role: '', memberId: '' }, rec));
+      audit(c, row ? '修改歷屆紀錄' : '新增歷屆紀錄', name, term + ' ' + title);
+      return A.officers(c);
+    },
+    deleteHonor: function (c, d) {
+      var row = db.officers.filter(function (r) { return honorKey(r) === d.key; })[0];
+      if (!row) throw err('NOT_FOUND', '找不到這筆紀錄，可能已經被刪除');
+      db.officers.splice(db.officers.indexOf(row), 1);
+      audit(c, '刪除歷屆紀錄', row.name, row.term + ' ' + row.title);
+      return A.officers(c);
     },
     handover: function (c, d) {
       var term = String(d.term || '').trim().slice(0, 20);
@@ -1187,7 +1263,7 @@ window.Mock = (function () {
     saveDoc: 'newsManage', deleteDoc: 'newsManage', checkinQr: 'viewRegs', setAttendance: 'viewRegs', attendanceStats: 'viewRegs',
     pushPreview: 'push', push: 'push', pushLog: 'push', proxyRegister: 'regProxy', members: 'memberManage', updateMember: 'memberManage', unbindMember: 'memberManage',
     requests: 'memberManage', handleRequest: 'memberManage',
-    prospects: 'viewRegs', officers: 'directory', handover: 'memberManage', schedulePush: 'push', scheduledPushes: 'push', cancelScheduledPush: 'push',
+    prospects: 'viewRegs', officers: 'directory', handover: 'memberManage', saveHonor: 'memberManage', deleteHonor: 'memberManage', schedulePush: 'push', scheduledPushes: 'push', cancelScheduledPush: 'push',
     savePoll: 'newsManage', setPollStatus: 'newsManage', deletePoll: 'newsManage',
     auditLog: 'memberManage', dues: 'duesManage', setDues: 'duesManage', exportAttendance: 'viewRegs' };
 

@@ -16,8 +16,8 @@
    * 後端（Apps Script）也有修改時，再把 Schema.gs 的 APP_VERSION 與下面的 MIN_BACKEND_VERSION 改成同一個值；
    * 只改前端畫面時不用動後端，也不會出現「後端還是舊版本」。
    */
-  var APP_VERSION = '2026.10.23.4';
-  var MIN_BACKEND_VERSION = '2026.10.23.3';
+  var APP_VERSION = '2026.10.23.5';
+  var MIN_BACKEND_VERSION = '2026.10.23.5';
   window.APP_VERSION = APP_VERSION;
 
   /**
@@ -1081,7 +1081,7 @@
       var todo = S.polls.filter(function (p) { return p.open && !p.myChoices; }).length;
       more.push(['polls', 'vote', '調查', todo ? todo + ' 份等你回覆' : '時間、地點調查', todo]);
     }
-    if (perm('directory')) more.push(['officers', 'award', '歷屆幹部', '本屆與歷年幹部名單']);
+    if (perm('directory')) more.push(['officers', 'award', '歷屆幹部', '本屆與歷年幹部、歷屆會長、歷屆主席']);
     if (me.member) more.push(['@subscribeCal', 'calplus', '訂閱活動行事曆', '活動自動出現在手機行事曆']);
     if (me.member) more.push(['@poster', 'qr', '招募海報', '印出來貼在活動現場，掃描就能認識我們']);
     if (more.length) {
@@ -1499,13 +1499,53 @@
     }).join('') + '</ul>';
   }
 
-  function viewOfficers() {
+  var HONOR_TABS = { president: '歷屆會長', chair: '歷屆主席' };
+
+  /** 歷屆會長／主席的一列：年度（屆別）｜姓名（職稱、備註） */
+  function honorRows(kind, list) {
+    var canEdit = perm('memberManage');
+    return '<ol class="honors">' + list.map(function (x) {
+      var no = x.termNo ? (/^\d+$/.test(x.termNo) ? '第 ' + x.termNo + ' 屆' : x.termNo) : '';
+      var showTitle = x.title !== (kind === 'chair' ? '主席' : '會長') ? x.title : '';
+      var sub = [showTitle, x.note].filter(Boolean).join('・');
+      return '<li' + (x.current ? ' class="is-current"' : '') + '><div class="honor-year"><b>' + esc(x.term || '本屆') + '</b>' + (no ? '<span>' + esc(no) + '</span>' : '') + '</div>' +
+        '<div class="honor-who"><b>' + esc(x.name) + '</b>' + (x.current ? '<span class="pill is-ok">現任</span>' : '') +
+        (sub ? '<span class="honor-sub">' + esc(sub) + '</span>' : '') + '</div>' +
+        (canEdit && x.key ? '<button type="button" class="iconbtn" data-act="honorEdit" data-kind="' + kind + '" data-key="' + esc(x.key) + '" aria-label="修改 ' + esc(x.name) + '">' + icon('edit') + '</button>' : '') + '</li>';
+    }).join('') + '</ol>';
+  }
+
+  function honorView(kind, d) {
+    var all = (d.honors && d.honors[kind]) || [];
+    var desc = S.honorDesc;
+    var list = desc ? all.slice().reverse() : all;
+    var label = kind === 'president' ? '會長' : '主席';
+    var html = '<div class="honor-tools"><span class="muted">共 ' + all.length + ' 位</span>' +
+      (all.length > 1 ? '<button type="button" class="linkbtn" data-act="honorSort">' + icon('swap') + (desc ? '最新的在前' : '最早的在前') + '</button>' : '') +
+      (perm('memberManage') ? '<button type="button" class="btn btn-small btn-ghost" data-act="honorAdd" data-kind="' + kind + '">' + icon('plus') + '新增</button>' : '') + '</div>';
+    if (!all.length) {
+      return html + empty('還沒有歷屆' + label + '的資料', perm('memberManage')
+        ? '按「新增」一筆一筆加，或在試算表「歷屆幹部」工作表填入年度、姓名、職稱「' + (kind === 'president' ? '會長' : '特友會主席') + '」。'
+        : '秘書處補上資料後就會出現在這裡。');
+    }
+    return html + honorRows(kind, list) +
+      (kind === 'chair' ? '<p class="hint">職稱含「主席」的都會列在這裡（例如特友會主席、監事會主席）。</p>' : '') +
+      (perm('memberManage') ? '<p class="hint">更早的年份也可以直接在試算表「歷屆幹部」工作表補：年度（西元或民國都可以）、姓名、職稱，屆別與備註可留空。</p>' : '');
+  }
+
+  function viewOfficers(r) {
     if (!perm('directory')) return forbidden();
+    var tab = HONOR_TABS[r && r.a] ? r.a : 'all';
     var d = ensure('officers', function () { return Api.call('officers'); });
-    var tool = perm('memberManage') ? '<button type="button" class="btn btn-small btn-ghost" data-go="admin/handover">年度交接</button>' : '';
-    var html = topbar({ back: 'directory', title: '歷屆幹部', actions: tool }) + '<main class="view">';
+    var tool = perm('memberManage') && tab === 'all' ? '<button type="button" class="btn btn-small btn-ghost" data-go="admin/handover">年度交接</button>' : '';
+    var html = topbar({ back: 'directory', title: HONOR_TABS[tab] || '歷屆幹部', actions: tool }) + '<main class="view">';
+    var h = d && !d.__error && d.honors ? d.honors : null;
+    html += '<div class="seg" role="tablist" aria-label="歷屆名單">' + [['all', '歷屆幹部'], ['president', '歷屆會長'], ['chair', '歷屆主席']].map(function (x) {
+      return '<button type="button" role="tab" aria-selected="' + (tab === x[0]) + '" data-go="officers' + (x[0] === 'all' ? '' : '/' + x[0]) + '" data-replace="1">' + x[1] + '</button>';
+    }).join('') + '</div>';
     if (!d) return html + skeleton(5) + '</main>';
     if (d.__error) return html + errorBlock(d.__error) + '</main>';
+    if (tab !== 'all') return html + honorView(tab, d) + '</main>';
     html += '<h3 class="month">本屆幹部<small>' + d.current.length + ' 位</small></h3>' +
       (d.current.length ? officerList(d.current) : '<p class="muted">名冊上還沒有幹部（角色是會長、理事等，或有填職稱的人）。</p>');
     d.terms.forEach(function (t) {
@@ -1575,6 +1615,25 @@
     var h = readHandover(form);
     var el = document.getElementById('ho-summary');
     if (el) el.innerHTML = '存檔 <b>' + h.archive.length + '</b> 位卸任幹部、更新 <b>' + h.changes.length + '</b> 位會員';
+  }
+
+  function openHonorForm(kind, item) {
+    var label = kind === 'president' ? '會長' : '主席';
+    var names = (Array.isArray(S.cache.directory) ? S.cache.directory : []).map(function (m) { return m.name; });
+    openSheet('<h2 class="sheet-title">' + (item ? '修改' : '新增') + '歷屆' + label + '</h2>' +
+      '<form class="form" data-form="honor" novalidate><input type="hidden" name="kind" value="' + kind + '"><input type="hidden" name="key" value="' + esc(item ? item.key : '') + '">' +
+      '<div class="field-row">' +
+      field('年度', '<input id="h-year" name="term" required maxlength="20" inputmode="numeric" value="' + esc(item ? item.term : '') + '" placeholder="例如 2025">', '西元或民國年都可以', 'h-year') +
+      field('屆別（選填）', '<input id="h-no" name="termNo" maxlength="10" inputmode="numeric" value="' + esc(item ? item.termNo : '') + '" placeholder="例如 39">', '', 'h-no') + '</div>' +
+      field('姓名', '<input id="h-name" name="name" required maxlength="30" list="h-names" autocomplete="off" value="' + esc(item ? item.name : '') + '">' +
+        (names.length ? '<datalist id="h-names">' + names.map(function (n) { return '<option value="' + esc(n) + '">'; }).join('') + '</datalist>' : ''), '', 'h-name') +
+      (kind === 'chair'
+        ? field('職稱', '<input id="h-title" name="title" required maxlength="40" value="' + esc(item ? item.title : '主席') + '" placeholder="例如：特友會主席">', '要包含「主席」兩個字', 'h-title')
+        : '<input type="hidden" name="title" value="' + esc(item ? item.title : '會長') + '">') +
+      field('備註（選填）', '<input id="h-note" name="note" maxlength="60" value="' + esc(item ? item.note : '') + '" placeholder="例如：創會會長、現任特友會長">', '', 'h-note') +
+      '<div class="form-actions"><button type="submit" class="btn btn-primary btn-block">儲存</button>' +
+      (item ? '<button type="button" class="btn btn-ghost is-danger btn-block" data-act="honorDelete" data-key="' + esc(item.key) + '" data-name="' + esc(item.term + ' ' + item.name) + '">刪除這筆</button>' : '') +
+      '</div></form>', (item ? '修改' : '新增') + '歷屆' + label);
   }
 
   /* ═════════════ 畫面：調查 ═════════════ */
@@ -2850,6 +2909,27 @@
       if (el.hasAttribute('data-q')) { S.dirQuery = el.getAttribute('data-q'); S.dirIndustry = ''; }
       render();
     },
+    honorSort: function () { S.honorDesc = !S.honorDesc; render(); },
+    honorAdd: function (el) { openHonorForm(el.getAttribute('data-kind'), null); },
+    honorEdit: function (el) {
+      var kind = el.getAttribute('data-kind'), key = el.getAttribute('data-key');
+      var d = S.cache.officers;
+      var item = d && d.honors ? (d.honors[kind] || []).filter(function (x) { return x.key === key; })[0] : null;
+      if (item) openHonorForm(kind, item);
+    },
+    honorDelete: function (el) {
+      var key = el.getAttribute('data-key'), name = el.getAttribute('data-name');
+      confirmSheet({ title: '刪除這筆紀錄？', body: esc(name) + ' 的這筆紀錄會從「歷屆幹部」工作表刪除。', ok: '刪除', cancel: '返回', danger: true })
+        .then(function (fd) {
+          if (!fd) return;
+          return Api.call('deleteHonor', { key: key }).then(function (d) {
+            S.cache.officers = d;
+            closeSheet();
+            render();
+            toast('已刪除');
+          });
+        }).catch(fail);
+    },
     pickOfficers: function (el) {
       var form = el.closest('form');
       form.querySelectorAll('input[name="roles"]').forEach(function (cb) { if (isOfficerRole(cb.value)) cb.checked = true; });
@@ -3036,6 +3116,20 @@
         if (res.me) S.me = res.me;
         render();
         toast('申請已送出');
+      }).catch(fail);
+    },
+    honor: function (form, btn) {
+      var fd = new FormData(form);
+      var data = { kind: fd.get('kind'), term: String(fd.get('term') || '').trim(), termNo: String(fd.get('termNo') || '').trim(),
+        name: String(fd.get('name') || '').trim(), title: String(fd.get('title') || '').trim(), note: String(fd.get('note') || '').trim() };
+      if (fd.get('key')) data.key = fd.get('key');
+      if (!/\d/.test(data.term)) { toast('請填年度，例如 2025', 'error'); form.term.focus(); return; }
+      if (!data.name) { toast('請填姓名', 'error'); form.name.focus(); return; }
+      busy(btn, Api.call('saveHonor', data)).then(function (d) {
+        S.cache.officers = d;
+        closeSheet();
+        render();
+        toast(data.key ? '已更新' : '已新增 ' + data.term + ' ' + data.name);
       }).catch(fail);
     },
     proxy: function (form, btn) {
@@ -3331,7 +3425,7 @@
     if (g) {
       e.preventDefault();
       if (!$layer.hidden) closeSheet();
-      go(g.getAttribute('data-go'));
+      go(g.getAttribute('data-go'), g.hasAttribute('data-replace')); // 分頁切換用 replace，返回鍵不會一頁頁退回
       return;
     }
     var a = t.closest('[data-act]');
