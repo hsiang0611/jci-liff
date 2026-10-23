@@ -814,6 +814,11 @@ input[type=radio], input[type=checkbox] { width: 20px; height: 20px; accent-colo
 .updbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px var(--gutter); background: var(--harbor-deep); color: #fff; font-size: 14px; }
 .updbar .btn-onbrand { height: 32px; flex: none; }
 .updbar.is-warn { background: #FFF6D6; color: #6B4E00; border-bottom: 1px solid #F0DE9F; }
+.updbar.is-soft { flex-wrap: wrap; font-size: 13.5px; line-height: 1.5; }
+.updbar.is-soft > span:first-child { flex: 1 1 220px; }
+.updbar small { display: block; opacity: .75; font-size: 12px; }
+.updbar-acts { display: flex; gap: 8px; flex: none; margin-left: auto; }
+.updbar .btn-onbrand-ghost { height: 32px; }
 
 /* ── 會員證（訪客）按鈕 ── */
 .mcard-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
