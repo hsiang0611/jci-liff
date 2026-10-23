@@ -17,6 +17,9 @@ window.APP_CONFIG = {
   ORG_NAME: '龍井國際青年商會',
   ORG_SHORT: '龍井青商',
 
+  // 「認識我們」頁與招募用的介紹文字（選填，留空會用預設文字）
+  ORG_INTRO: '',
+
   // 設為 true 可強制示範模式（例如給理監事看畫面）
   DEMO: false
 };

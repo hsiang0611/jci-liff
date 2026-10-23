@@ -11,18 +11,22 @@
 
   var CFG = window.APP_CONFIG || {};
 
+  /** 版本：每次更新前端時改這裡，並同步改後端 Schema.gs 的 APP_VERSION 與 index.html 的 ?v= */
+  var APP_VERSION = '2026.10.23';
+  window.APP_VERSION = APP_VERSION;
+
   /**
    * 「同意顯示電話於通訊錄」條文。要修改文字就改這裡，每一項一行。
    * 修改後建議同時更新 PHONE_TERMS_VERSION，讓已同意的會員下次打開時重新閱讀。
    */
-  var PHONE_TERMS_VERSION = '2026-10';
+  var PHONE_TERMS_VERSION = '2026-11';
   var PHONE_TERMS = [
-    ['蒐集目的', '為便利本會會友間聯繫會務、活動與交流，本會將您的手機號碼顯示於會員專區的「會員通訊錄」。'],
+    ['蒐集目的', '為便利本會會友間聯繫會務、活動與交流，本會將您同意公開的手機號碼與 Email 顯示於會員專區的「會員通訊錄」。電話與 Email 可以分別選擇是否公開。'],
     ['查閱對象', '僅限已完成 LINE 綁定、且角色具有「查看通訊錄」權限的本會會友（例如會員、幹部、特友）可以查閱；訪客、預備會員及未綁定者無法查閱。'],
     ['使用限制', '會友查閱後，僅得用於本會會務與活動聯繫，不得轉作商業行銷、提供第三人、或公開張貼於網路及群組。'],
     ['保存期間', '自您同意之日起，至您撤回同意、會籍終止或帳號停用為止。'],
-    ['您的權利', '您可以隨時在「我的資料」撤回同意，撤回後通訊錄立即不再顯示您的電話。您也可以向秘書處請求查詢、更正或刪除您的個人資料。'],
-    ['未同意時', '您的姓名、職稱、公司等資料仍會顯示於通訊錄，但不顯示電話。活動報名時留給主辦單位的電話，僅供該活動聯繫使用，不受本同意影響。'],
+    ['您的權利', '您可以隨時在「我的資料」分別撤回電話或 Email 的公開，撤回後通訊錄立即不再顯示。您也可以向秘書處請求查詢、更正或刪除您的個人資料。'],
+    ['未同意時', '您的姓名、職稱、公司等資料仍會顯示於通訊錄，但不顯示您未同意公開的電話與 Email。活動報名時留給主辦單位的電話，僅供該活動聯繫使用，不受本同意影響。'],
     ['資料保護', '本會依個人資料保護法妥善保管會員資料，不會將您的資料提供給本會以外的單位。本說明如有修改，會在會員專區公告並請您重新確認。']
   ];
 
@@ -37,6 +41,8 @@
     pendingCount: 0, friend: null, docs: [], birthdays: [], industries: [],
     polls: [], catColors: { event: {}, news: {} }, meetingCategories: ['例會'],
     evView: pref('jci.evView') === 'month' ? 'month' : 'list', calMonth: 0, calDay: 0, dirTab: 'people',
+    updateNeeded: false, backendOld: false, serverVersion: '', stale: false,
+    auditQuery: '', duesYear: 0, duesFilter: '', duesQuery: '', attTab: 'members',
     cache: {},
     dirIndustry: '', attYear: 0, checkinDone: {},
     evFilter: 'upcoming', newsCat: '', dirQuery: '', memQuery: '', memFilter: '',
@@ -289,7 +295,10 @@
     Object.keys(S.cache).forEach(function (k) { if (k.indexOf(prefix) === 0) delete S.cache[k]; });
   }
 
-  function applyInit(d) {
+  function applyInit(d, keepCache) {
+    S.serverVersion = d.version || '';
+    S.updateNeeded = !!d.version && cmpVer(d.version, APP_VERSION) > 0;
+    S.backendOld = cmpVer(d.version || '0', APP_VERSION) < 0;
     S.me = d.me;
     S.roles = (d.roles || []).slice().sort(function (a, b) { return a.level - b.level; });
     S.events = d.events || [];
@@ -303,13 +312,15 @@
     S.polls = d.polls || [];
     S.catColors = d.catColors || { event: {}, news: {} };
     S.meetingCategories = d.meetingCategories && d.meetingCategories.length ? d.meetingCategories : ['例會'];
-    S.cache = {};
+    if (!keepCache) S.cache = {};
   }
 
   function reloadAll() {
     return Promise.all([Api.call('init'), Api.friendship()]).then(function (r) {
       applyInit(r[0]);
+      saveInitCache(r[0]);
       S.friend = r[1];
+      S.stale = false;
       render();
     });
   }
@@ -346,7 +357,7 @@
         icon('back') + '</button><div class="topbar-title">' + esc(o.title || '') + '</div><div class="topbar-actions">' + (o.actions || '') + '</div></header>';
     }
     return '<header class="topbar"><div class="brand">' + logo('brand-logo') + '<span class="brand-name">' + esc(CFG.ORG_NAME || '會員專區') +
-      '</span></div><div class="topbar-actions"><button type="button" class="iconbtn" data-act="refresh" aria-label="重新整理">' + icon('refresh') +
+      '</span></div><div class="topbar-actions"><button type="button" class="iconbtn" data-act="refresh" aria-label="' + (S.stale ? '更新中' : '重新整理') + '"' + (S.stale ? ' aria-busy="true"' : '') + '>' + icon('refresh') +
       '</button><button type="button" class="avatar-btn" data-tab="me" aria-label="我的">' + avatar(S.me, 32) + '</button></div></header>';
   }
 
@@ -446,7 +457,8 @@
     if (me.disabled) body = '<p class="mcard-note">這個 LINE 帳號對應的會員目前停用中，請洽秘書處。</p>';
     else if (me.pendingRequest) body = '<p class="mcard-note">綁定申請已送出，秘書處確認後就能使用會員功能。</p>';
     else body = '<p class="mcard-note">綁定會員身分後，就能報名會員活動、查看會員通訊錄。</p>' +
-      '<button type="button" class="btn btn-onbrand" data-tab="me">綁定會員身分</button>';
+      '<div class="mcard-actions"><button type="button" class="btn btn-onbrand" data-tab="me">綁定會員身分</button>' +
+      '<button type="button" class="btn btn-onbrand-ghost" data-go="join">認識龍井青商</button></div>';
     return '<section class="mcard is-guest" aria-label="會員證">' + contours() + org +
       '<div class="mcard-name">嗨，' + esc(me.lineName || 'LINE 使用者') + '</div>' + body + '</section>';
   }
@@ -602,6 +614,7 @@
         acts.push('<button type="button" class="btn btn-ghost" data-act="checkinQr" data-id="' + esc(ev.id) + '">' + icon('qr') + '報到 QR code</button>');
       }
       if (perm('eventManage')) acts.push('<button type="button" class="btn btn-ghost" data-go="event-edit/' + esc(ev.id) + '">' + icon('edit') + '編輯活動</button>');
+      if (perm('eventManage')) acts.push('<button type="button" class="btn btn-ghost" data-go="event-edit/new/' + esc(ev.id) + '">' + icon('copy') + '複製成新活動</button>');
       if (canPush() && ev.regPeople) acts.push('<button type="button" class="btn btn-ghost" data-act="pushFor" data-type="event" data-id="' + esc(ev.id) + '">' + icon('send') + '通知報名者</button>');
       if (canPush() && ev.unreplied && ev.unreplied.some(function (u) { return u.bound; })) {
         acts.push('<button type="button" class="btn btn-ghost" data-act="pushFor" data-type="unreplied" data-id="' + esc(ev.id) + '">' + icon('send') + '催未回覆者</button>');
@@ -685,11 +698,13 @@
   function viewEventEdit(r) {
     if (!perm('eventManage')) return forbidden();
     var isNew = r.a === 'new';
-    var ev = isNew ? { category: firstCat(S.categories.event, '例會'), audience: '會員', status: '發布', capacity: 0 } :
+    var src = isNew && r.b ? findEvent(r.b) : null;
+    var ev = src ? copyOf(src) : isNew ? { category: firstCat(S.categories.event, '例會'), audience: '會員', status: '發布', capacity: 0 } :
       S.events.filter(function (e) { return e.id === r.a; })[0];
     if (!ev) return topbar({ back: 'events', title: '編輯活動' }) + '<main class="view">' + empty('找不到這個活動', '') + '</main>';
-    var html = topbar({ back: isNew ? 'events' : 'event/' + ev.id, title: isNew ? '新增活動' : '編輯活動' });
-    html += '<main class="view"><form class="form" data-form="event" novalidate>' +
+    var html = topbar({ back: src ? 'event/' + src.id : isNew ? 'events' : 'event/' + ev.id, title: src ? '複製活動' : isNew ? '新增活動' : '編輯活動' });
+    html += '<main class="view">' + (src ? '<div class="banner is-muted" style="margin:6px 0 14px">已從「' + esc(ev._from) + '」複製。日期預設為 4 週後的同一時間，請確認後再建立。</div>' : '') +
+      '<form class="form" data-form="event" novalidate>' +
       '<input type="hidden" name="id" value="' + esc(ev.id || '') + '">' +
       field('活動名稱', '<input id="f-title" name="title" required maxlength="80" value="' + esc(ev.title || '') + '" placeholder="例如：十二月份月例會">', '', 'f-title') +
       field('類別', '<select id="f-cat" name="category">' + catOptions(S.categories.event, ev.category) + '</select>', '', 'f-cat') +
@@ -824,11 +839,21 @@
     var d = ensure(key, function () { return Api.call('attendanceStats', { year: year }); });
     var html = topbar({ back: 'me', title: '出席統計' }) + '<main class="view">';
     var thisYear = new Date().getFullYear();
-    html += '<div class="seg" role="tablist" aria-label="年度">' + [thisYear, thisYear - 1].map(function (y) {
+    var years = d && d.years && d.years.length ? d.years.slice(0, 3) : [thisYear, thisYear - 1];
+    if (years.indexOf(year) < 0) years.push(year);
+    html += '<div class="seg" role="tablist" aria-label="年度">' + years.map(function (y) {
       return '<button type="button" role="tab" aria-selected="' + (y === year) + '" data-act="attYear" data-v="' + y + '">' + y + ' 年</button>';
     }).join('') + '</div>';
     if (!d) return html + skeleton(6) + '</main>';
     if (d.__error) return html + errorBlock(d.__error) + '</main>';
+    var tab = S.attTab;
+    html += '<div class="chips" role="tablist" aria-label="檢視" style="margin-top:12px">' + [['members', '會員出席'], ['events', '各場活動'], ['perfect', '全勤與排行']].map(function (x) {
+      return '<button type="button" role="tab" aria-selected="' + (tab === x[0]) + '" data-act="attTab" data-v="' + x[0] + '">' + x[1] + '</button>';
+    }).join('') + '</div>';
+    var tools = '<div class="manage-actions" style="margin-top:4px"><button type="button" class="btn btn-ghost" data-act="copyAtt" data-year="' + year + '">' + icon('copy') + '複製統計表</button>' +
+      '<button type="button" class="btn btn-ghost" data-act="exportAtt" data-year="' + year + '">' + icon('doc') + '匯出到試算表</button></div>';
+    if (tab === 'events') return html + attEventsTab(d) + tools + '</main>';
+    if (tab === 'perfect') return html + attPerfectTab(d) + tools + '</main>';
     html += '<p class="summary">' + d.year + ' 年已舉行例會 <b>' + d.meetingTotal + '</b> 場，其他活動 <b>' + d.otherTotal + '</b> 場。出席以掃碼報到或幹部點名為準。' +
       (S.meetingCategories.length > 1 ? '「例會」包含：' + esc(S.meetingCategories.join('、')) + '。' : '') + '</p>';
     if (!d.meetingTotal && !d.otherTotal) return html + empty('這一年還沒有已舉行的活動', '') + '</main>';
@@ -838,8 +863,7 @@
         '<div class="att-cell"><b>' + m.meetingAttended + '</b><small>／' + d.meetingTotal + '</small><span class="capbar' + (d.meetingTotal && pct < 50 ? ' is-alert' : '') + '"><i style="width:' + pct + '%"></i></span></div>' +
         '<div class="att-cell"><b>' + m.otherAttended + '</b><small>／' + d.otherTotal + '</small></div></div>';
     }).join('') + '</div>';
-    html += '<button type="button" class="btn btn-ghost btn-block" data-act="copyAtt" data-year="' + year + '">' + icon('copy') + '複製統計表</button>';
-    return html + '</main>';
+    return html + tools + '</main>';
   }
 
   /* ═════════════ 畫面：通訊錄 ═════════════ */
@@ -901,7 +925,8 @@
           (m.phone ? '<a class="iconbtn" href="tel:' + esc(m.phone) + '" aria-label="打電話給' + esc(m.name) + '">' + icon('phone') + '</a>' : '') + '</summary>' +
           '<dl class="drow-more">' + (m.phone ? '<div><dt>手機</dt><dd><a href="tel:' + esc(m.phone) + '">' + esc(m.phone) + '</a></dd></div>'
             : m.phoneHidden ? '<div><dt>手機</dt><dd class="muted">未公開（本人未同意顯示）</dd></div>' : '') +
-          (m.email ? '<div><dt>Email</dt><dd><a href="mailto:' + esc(m.email) + '">' + esc(m.email) + '</a></dd></div>' : '') +
+          (m.email ? '<div><dt>Email</dt><dd><a href="mailto:' + esc(m.email) + '">' + esc(m.email) + '</a></dd></div>'
+            : m.emailHidden ? '<div><dt>Email</dt><dd class="muted">未公開</dd></div>' : '') +
           (m.company ? '<div><dt>公司</dt><dd>' + esc(m.company) + '</dd></div>' : '') +
           (m.industry ? '<div><dt>行業</dt><dd>' + esc(m.industry) + '</dd></div>' : '') +
           (m.joinYear ? '<div><dt>入會</dt><dd>' + esc(m.joinYear) + ' 年</dd></div>' : '') +
@@ -947,11 +972,11 @@
       '<button type="button" class="linkbtn" data-act="editMe">' + icon('edit') + '編輯</button></div>';
     html += filled.length ? '<dl class="kv">' + filled.map(function (r) { return '<div><dt>' + r[0] + '</dt><dd>' + esc(r[1]) + '</dd></div>'; }).join('') + '</dl>'
       : '<p class="muted">補上公司、行業與生日，會友才找得到你，壽星祝福也才收得到。</p>';
-    var agreed = !!m.phoneConsent;
-    html += '<div class="consent-row' + (agreed ? ' is-on' : '') + '"><div>' + icon(agreed ? 'checkcircle' : 'phone') +
-      '<div><b>' + (agreed ? '通訊錄顯示我的電話' : '通訊錄不顯示我的電話') + '</b><span>' +
-      (agreed ? '已於 ' + fmtDate(m.phoneConsent) + ' 同意，只有本會會友看得到' : '同意後，會友才能在通訊錄看到你的手機') + '</span></div></div>' +
-      '<button type="button" class="btn btn-ghost btn-small" data-act="phoneConsent">' + (agreed ? '撤回' : '同意顯示') + '</button></div>';
+    var shown = [m.phoneConsent ? '電話' : '', m.emailConsent ? 'Email' : ''].filter(Boolean);
+    html += '<div class="consent-row' + (shown.length ? ' is-on' : '') + '"><div>' + icon(shown.length ? 'checkcircle' : 'phone') +
+      '<div><b>' + (shown.length ? '通訊錄顯示我的' + shown.join('、') : '通訊錄不顯示我的電話與 Email') + '</b><span>' +
+      (shown.length ? '只有本會會友看得到，可隨時調整' : '同意後，會友才能在通訊錄看到你的聯絡方式') + '</span></div></div>' +
+      '<button type="button" class="btn btn-ghost btn-small" data-act="phoneConsent">' + (shown.length ? '調整' : '設定') + '</button></div>';
     if (a && (a.meetingTotal || a.otherTotal)) {
       var pct = a.meetingTotal ? Math.round(a.meetingAttended / a.meetingTotal * 100) : 0;
       html += '<div class="att-me"><div class="att-row"><span>' + a.year + ' 年例會出席</span><b>' + a.meetingAttended + '／' + a.meetingTotal + '</b></div>' +
@@ -968,7 +993,7 @@
       '<span>' + esc(me.role) + (me.member && me.member.title ? '　' + esc(me.member.title) : '') + '</span>' +
       (me.member ? '<span class="muted">LINE：' + esc(me.lineName) + '</span>' : '') + '</div></section>';
     html += bindSection();
-    if (me.member) html += progressSection(me) + profileSection(me) + shopSection(me);
+    if (me.member) html += progressSection(me) + profileSection(me) + duesSection(me) + shopSection(me);
     html += friendNotice();
 
     var mine = S.events.filter(function (e) { return e.myReg && !isPast(e); });
@@ -984,14 +1009,17 @@
       more.push(['polls', 'vote', '調查', todo ? todo + ' 份等你回覆' : '時間、地點調查', todo]);
     }
     if (perm('directory')) more.push(['officers', 'award', '歷屆幹部', '本屆與歷年幹部名單']);
+    if (me.member) more.push(['@subscribeCal', 'calplus', '訂閱活動行事曆', '活動自動出現在手機行事曆']);
+    if (me.member) more.push(['@poster', 'qr', '招募海報', '印出來貼在活動現場，掃描就能認識我們']);
     if (more.length) {
       html += '<section class="block"><div class="menu">' + more.map(function (it) {
-        return '<button type="button" class="menu-item" data-go="' + it[0] + '">' + icon(it[1]) + '<div><b>' + it[2] + '</b><span>' + esc(it[3]) + '</span></div>' +
+        var target = it[0].charAt(0) === '@' ? 'data-act="' + it[0].slice(1) + '"' : 'data-go="' + it[0] + '"';
+        return '<button type="button" class="menu-item" ' + target + '>' + icon(it[1]) + '<div><b>' + it[2] + '</b><span>' + esc(it[3]) + '</span></div>' +
           (it[4] ? '<i class="count">' + it[4] + '</i>' : '') + icon('next', 'chev') + '</button>';
       }).join('') + '</div></section>';
     }
 
-    if (anyAdmin() || perm('viewRegs')) {
+    if (anyAdmin() || perm('viewRegs') || perm('duesManage')) {
       var items = [];
       if (canPush()) items.push(['admin/push', 'send', '發送通知', '依角色或活動推播 LINE 訊息']);
       if (perm('eventManage')) items.push(['event-edit/new', 'calendar', '新增活動', '']);
@@ -1003,7 +1031,9 @@
         items.push(['admin/requests', 'inbox', '綁定審核', S.pendingCount ? S.pendingCount + ' 筆待處理' : '沒有待處理的申請', S.pendingCount]);
         items.push(['admin/members', 'users', '會員管理', '角色、狀態、LINE 綁定']);
         items.push(['admin/handover', 'swap', '年度交接', '存檔卸任幹部、一次更新新年度職務']);
+        items.push(['admin/audit', 'shield', '操作紀錄', '誰在什麼時候改了什麼']);
       }
+      if (perm('duesManage')) items.push(['admin/dues', 'coin', '會費管理', '登錄繳費、提醒未繳']);
       html += '<section class="block"><div class="block-head"><h2>' + (anyAdmin() ? '管理功能' : '幹部功能') + '</h2></div><div class="menu">' + items.map(function (it) {
         return '<button type="button" class="menu-item" data-go="' + it[0] + '">' + icon(it[1]) + '<div><b>' + it[2] + '</b>' + (it[3] ? '<span>' + esc(it[3]) + '</span>' : '') + '</div>' +
           (it[4] ? '<i class="count">' + it[4] + '</i>' : '') + icon('next', 'chev') + '</button>';
@@ -1062,6 +1092,8 @@
       radio('event', '活動報名者', '') + '<div class="choice-more" data-show="event"><select name="eventId" aria-label="活動">' + evOpts + '</select></div>' +
       radio('eventUnreplied', '活動未回覆者', '限會員以上的活動，提醒還沒回覆出席或請假的人') + '<div class="choice-more" data-show="eventUnreplied"><select name="eventId2" aria-label="活動">' + evOpts + '</select></div>' +
       (openPolls.length ? radio('pollUnvoted', '調查未填寫者', '提醒還沒填寫調查的會員') + '<div class="choice-more" data-show="pollUnvoted"><select name="pollId" aria-label="調查">' + pollOpts + '</select></div>' : '') +
+      (perm('duesManage') ? radio('duesUnpaid', '會費未繳者', '依「會費標準」與繳費紀錄') + '<div class="choice-more" data-show="duesUnpaid"><select name="duesYear" aria-label="年度">' +
+        [new Date().getFullYear(), new Date().getFullYear() + 1].map(function (y) { return '<option value="' + y + '"' + (Number(p.duesYear) === y ? ' selected' : '') + '>' + y + ' 年度</option>'; }).join('') + '</select></div>' : '') +
       radio('friends', '所有加入官方帳號的好友', '包含非會員，人數最多、額度用得最快') +
       '</div><p class="estimate" id="estimate" aria-live="polite">' + estimateHtml(p.preview) + '</p></section>';
     html += '<section class="step"><h2><span class="step-n">2</span>內容</h2>' +
@@ -1137,6 +1169,7 @@
     p.title = fd.get('title') || '';
     p.text = fd.get('text') || '';
     p.pollId = fd.get('pollId') || '';
+    p.duesYear = fd.get('duesYear') || '';
     p.linkType = fd.get('linkType') || 'none';
     p.linkId = p.linkType === 'event' ? fd.get('linkEvent') : p.linkType === 'news' ? fd.get('linkNews') : p.linkType === 'poll' ? fd.get('linkPoll') : '';
     p.linkUrl = fd.get('linkUrl') || '';
@@ -1156,6 +1189,7 @@
     if (p.mode === 'roles') return { mode: 'roles', roles: p.roles };
     if (p.mode === 'event' || p.mode === 'eventUnreplied') return { mode: p.mode, eventId: p.eventId };
     if (p.mode === 'pollUnvoted') return { mode: p.mode, pollId: p.pollId };
+    if (p.mode === 'duesUnpaid') return { mode: p.mode, year: Number(p.duesYear) || new Date().getFullYear() };
     return { mode: p.mode };
   }
   var previewTimer = null;
@@ -1628,6 +1662,276 @@
     }).join('') + '</ol>' + (d.pending.length ? '<p class="hint" style="margin-top:8px">預約的通知會在設定時間後 5 分鐘內送出，收件人以發送當下的名單為準。</p>' : '') + '</section>';
   }
 
+  /* ═════════════ 版本、暫存首頁資料 ═════════════ */
+
+  function cmpVer(a, b) {
+    var x = String(a || '').split('.').map(Number), y = String(b || '').split('.').map(Number);
+    for (var i = 0; i < Math.max(x.length, y.length); i++) {
+      var d = (x[i] || 0) - (y[i] || 0);
+      if (d) return d;
+    }
+    return 0;
+  }
+
+  function versionBar() {
+    if (S.updateNeeded) {
+      return '<div class="updbar" role="status"><span>系統已更新，請重新整理使用新版</span><button type="button" class="btn btn-small btn-onbrand" data-act="hardReload">重新整理</button></div>';
+    }
+    if (S.backendOld && anyAdmin()) {
+      return '<div class="updbar is-warn" role="status"><span>後端還是舊版本' + (S.serverVersion ? '（' + esc(S.serverVersion) + '）' : '') +
+        '，請秘書處把 Apps Script 換成新程式並「部署新版本」</span></div>';
+    }
+    return '';
+  }
+
+  function initCacheKey() {
+    var u = Api.userKey();
+    return u ? 'jci.init.' + u : '';
+  }
+  /** 把首頁資料存在這支手機，下次打開先顯示，背景再更新（只存自己的，換帳號會清掉別人的） */
+  function saveInitCache(d) {
+    if (S.demo) return;
+    var k = initCacheKey();
+    if (!k) return;
+    try {
+      for (var i = localStorage.length - 1; i >= 0; i--) {
+        var key = localStorage.key(i);
+        if (key && key.indexOf('jci.init.') === 0 && key !== k) localStorage.removeItem(key);
+      }
+      localStorage.setItem(k, JSON.stringify({ at: Date.now(), v: APP_VERSION, d: d }));
+    } catch (e) { /* 空間不足或無痕模式：不影響使用 */ }
+  }
+  function loadInitCache() {
+    if (S.demo) return null;
+    var k = initCacheKey();
+    if (!k) return null;
+    try {
+      var o = JSON.parse(localStorage.getItem(k) || 'null');
+      if (o && o.v === APP_VERSION && Date.now() - o.at < 7 * 86400000) return o.d;
+    } catch (e) { /* ignore */ }
+    return null;
+  }
+
+  function needQr() {
+    return Api.loadScriptOnce('js/qrcode.js?v=' + APP_VERSION, function () { return !!window.qrcode; });
+  }
+
+  /* ═════════════ 活動：複製 ═════════════ */
+
+  var CN_NUM = ['', '一', '二', '三', '四', '五', '六', '七', '八', '九', '十', '十一', '十二'];
+  /** 「十月份月例會」→「十一月份月例會」：只換掉標題裡的月份 */
+  function renameMonth(title, from, to) {
+    var cn = new RegExp('(^|[^一二三四五六七八九十])' + CN_NUM[from] + '月');
+    if (cn.test(title)) return title.replace(cn, '$1' + CN_NUM[to] + '月');
+    var ar = new RegExp('(^|\\D)' + from + '月');
+    if (ar.test(title)) return title.replace(ar, '$1' + to + '月');
+    return title;
+  }
+  /** 複製活動：日期預設為 4 週後同一時間（同一個星期幾），已過就再往後推 */
+  function copyOf(src) {
+    var s = Date.parse(src.start);
+    var t = s + 28 * 86400000;
+    while (t < Date.now()) t += 7 * 86400000;
+    var delta = t - s;
+    var shift = function (iso) { return iso ? new Date(Date.parse(iso) + delta).toISOString() : ''; };
+    var a = tp(src.start), b = tp(new Date(t).toISOString());
+    return {
+      title: a.m !== b.m ? renameMonth(src.title, a.m, b.m) : src.title, category: src.category,
+      start: new Date(t).toISOString(), end: shift(src.end), deadline: shift(src.deadline),
+      location: src.location, mapUrl: src.mapUrl, audience: src.audience, capacity: src.capacity, fee: src.fee,
+      description: src.description, imageUrl: src.imageUrl, status: '發布', _from: src.title
+    };
+  }
+
+  /* ═════════════ 操作紀錄 ═════════════ */
+
+  function viewAudit() {
+    if (!perm('memberManage')) return forbidden();
+    var list = ensure('audit', function () { return Api.call('auditLog'); });
+    var html = topbar({ back: 'me', title: '操作紀錄' }) + '<main class="view">';
+    if (!list) return html + skeleton(5) + '</main>';
+    if (list.__error) return html + errorBlock(list.__error) + '</main>';
+    html += '<p class="summary">誰在什麼時候改了角色、刪了資料、取消活動、登錄會費……都會記在這裡。這裡顯示最近 300 筆，完整紀錄在試算表的「操作紀錄」工作表。</p>' +
+      '<div class="search">' + icon('search') + '<input type="search" data-filter="audit" placeholder="搜尋人名、動作、內容" value="' + esc(S.auditQuery) + '" aria-label="搜尋紀錄"></div>' +
+      '<div id="audit-list">' + auditRows(list) + '</div>';
+    return html + '</main>';
+  }
+  function auditRows(list) {
+    var q = S.auditQuery.trim().toLowerCase();
+    if (q) list = list.filter(function (x) { return (x.actor + x.action + x.target + x.detail).toLowerCase().indexOf(q) >= 0; });
+    if (!list.length) return empty(q ? '找不到符合的紀錄' : '還沒有紀錄', '');
+    var out = '', day = '';
+    list.forEach(function (x) {
+      var d = fmtDate(x.time);
+      if (d !== day) { out += (day ? '</ol>' : '') + '<h3 class="month">' + esc(fmtMD(x.time)) + '</h3><ol class="log audit">'; day = d; }
+      out += '<li><div><b>' + esc(x.action) + (x.target ? '　' + esc(x.target) : '') + '</b>' + (x.detail ? '<span>' + esc(x.detail) + '</span>' : '') + '</div>' +
+        '<div class="log-side"><time>' + esc(tp(x.time) ? tp(x.time).hm : '') + '</time><span>' + esc(x.actor) + '</span></div></li>';
+    });
+    return out + '</ol>';
+  }
+
+  /* ═════════════ 會費 ═════════════ */
+
+  function money(n) {
+    return n === null || n === undefined || n === '' ? '' : Number(n).toLocaleString('en-US') + ' 元';
+  }
+
+  function duesSection(me) {
+    var list = me.dues || [];
+    if (!list.length) return '';
+    var unpaidDesc = '';
+    var rows = list.map(function (x) {
+      if (!x.paid && x.required && x.desc) unpaidDesc = x.desc;
+      var sub = x.paid ? '已於 ' + fmtDate(x.paid.paidAt) + ' 繳納' + (x.paid.amount ? ' ' + money(x.paid.amount) : '') + (x.paid.method ? '（' + x.paid.method + '）' : '')
+        : x.required ? '應繳' + (x.amount ? ' ' + money(x.amount) : '') : '不用繳';
+      return '<div class="dues-row"><div><b>' + x.year + ' 年度會費</b><span>' + esc(sub) + '</span></div>' +
+        '<span class="pill ' + (x.paid ? 'is-ok' : x.required ? 'is-alert' : 'is-muted') + '">' + (x.paid ? '已繳' : x.required ? '未繳' : '免繳') + '</span></div>';
+    }).join('');
+    return '<section class="block card dues-me"><div class="block-head"><h2>會費</h2></div>' + rows +
+      (unpaidDesc ? '<p class="dues-desc">' + esc(unpaidDesc) + '</p>' : '') +
+      '<p class="hint">繳費紀錄由財務長登錄，有疑問請洽財務長。</p></section>';
+  }
+
+  function viewDues() {
+    if (!perm('duesManage')) return forbidden();
+    var cy = new Date().getFullYear();
+    var year = S.duesYear || (new Date().getMonth() + 1 >= 11 ? cy + 1 : cy);
+    var d = ensure('dues:' + year, function () { return Api.call('dues', { year: year }); });
+    var html = topbar({ back: 'me', title: '會費管理' }) + '<main class="view">';
+    var years = d && d.years ? d.years : [cy - 1, cy, cy + 1];
+    html += '<div class="seg" role="tablist" aria-label="年度">' + years.map(function (y) {
+      return '<button type="button" role="tab" aria-selected="' + (y === year) + '" data-act="duesYear" data-v="' + y + '">' + y + ' 年度</button>';
+    }).join('') + '</div>';
+    if (!d) return html + skeleton(6) + '</main>';
+    if (d.__error) return html + errorBlock(d.__error) + '</main>';
+    var t = d.totals;
+    html += '<div class="dues-sum"><div><b>' + t.paid + '</b><span>已繳</span></div><div class="is-alert"><b>' + t.unpaid + '</b><span>未繳</span></div>' +
+      '<div><b>' + t.required + '</b><span>應繳人數</span></div><div><b>' + Number(t.collected).toLocaleString('en-US') + '</b><span>已收（元）</span></div></div>';
+    if (!d.rules.length) html += '<div class="banner is-muted">還沒有設定會費標準。請在試算表的「會費標準」工作表填寫要繳費的角色與金額。</div>';
+    else if (d.rules.some(function (r) { return r.amount === null; })) html += '<p class="hint">「會費標準」有角色還沒填金額，登錄時要自己輸入金額。</p>';
+    var f = S.duesFilter;
+    html += '<div class="chips" role="tablist" aria-label="篩選" style="margin-top:14px">' + [['', '全部'], ['unpaid', '未繳'], ['paid', '已繳']].map(function (x) {
+      return '<button type="button" role="tab" aria-selected="' + (f === x[0]) + '" data-act="duesFilter" data-v="' + x[0] + '">' + x[1] + '</button>';
+    }).join('') + '</div>' +
+      '<div class="search">' + icon('search') + '<input type="search" data-filter="dues" placeholder="搜尋姓名" value="' + esc(S.duesQuery) + '" aria-label="搜尋會員"></div>' +
+      '<div id="dues-list">' + duesRows(d) + '</div>';
+    var acts = [];
+    if (canPush() && t.unpaid) acts.push('<button type="button" class="btn btn-ghost" data-act="pushFor" data-type="dues" data-id="' + year + '">' + icon('send') + 'LINE 提醒未繳的 ' + t.unpaid + ' 位</button>');
+    if (t.unpaid) acts.push('<button type="button" class="btn btn-ghost" data-act="copyUnpaid" data-year="' + year + '">' + icon('copy') + '複製未繳名單</button>');
+    if (acts.length) html += '<div class="manage-actions" style="margin-top:14px">' + acts.join('') + '</div>';
+    html += '<p class="hint" style="margin-top:12px">點會員登錄繳費。紀錄存在試算表的「會費」工作表，也可以直接在那裡修改。</p>';
+    return html + '</main>';
+  }
+  function duesRows(d) {
+    var q = S.duesQuery.trim().toLowerCase(), f = S.duesFilter;
+    var list = d.members.filter(function (m) {
+      if (f === 'unpaid' && (m.paid || !m.required)) return false;
+      if (f === 'paid' && !m.paid) return false;
+      return !q || (m.name + m.role + m.title).toLowerCase().indexOf(q) >= 0;
+    }).sort(function (a, b) { return (!!a.paid - !!b.paid) || byLevelThenName(a, b); });
+    if (!list.length) return empty(f === 'unpaid' ? '大家都繳了' : '沒有符合的會員', '');
+    return '<div class="rows">' + list.map(function (m) {
+      return '<button type="button" class="mrow" data-act="duesEdit" data-id="' + esc(m.id) + '" data-year="' + d.year + '">' +
+        '<div class="mrow-main"><b>' + esc(m.name) + '</b><span class="dues-sub">' + esc([m.role, m.title].filter(Boolean).join('　')) + '</span></div>' +
+        '<div class="mrow-side">' + (m.paid ? '<span class="pill is-ok">已繳</span><span class="bound">' + esc(fmtMD(m.paid.paidAt)) + (m.paid.amount ? ' ' + money(m.paid.amount) : '') + '</span>'
+          : '<span class="pill is-alert">未繳</span>' + (m.amount ? '<span class="bound">' + money(m.amount) + '</span>' : '')) + '</div></button>';
+    }).join('') + '</div>';
+  }
+  function duesSheet(m, year) {
+    var p = m.paid;
+    var today = tp(new Date().toISOString());
+    var dateVal = p ? (function (t) { return t.y + '-' + pad(t.m) + '-' + pad(t.d); })(tp(p.paidAt)) : today.y + '-' + pad(today.m) + '-' + pad(today.d);
+    var method = p ? p.method : '轉帳';
+    return '<h2 class="sheet-title">' + esc(m.name) + '<small>' + year + ' 年度會費　' + esc(m.role) + (m.amount ? '　應繳 ' + money(m.amount) : '') + '</small></h2>' +
+      (p ? '<div class="banner is-ok" style="margin:0 0 14px">已登錄：' + esc(fmtDate(p.paidAt)) + (p.amount ? '　' + money(p.amount) : '') + (p.recordedBy ? '　由 ' + esc(p.recordedBy) + ' 登錄' : '') + '</div>' : '') +
+      '<form class="form" data-form="dues" novalidate><input type="hidden" name="memberId" value="' + esc(m.id) + '"><input type="hidden" name="year" value="' + year + '">' +
+      '<div class="field-row">' + field('金額', '<input id="du-amt" name="amount" type="number" min="0" inputmode="numeric" value="' + esc(p && p.amount !== null ? p.amount : (m.amount || '')) + '">', '', 'du-amt') +
+      field('繳費日期', '<input id="du-date" name="paidAt" type="date" value="' + dateVal + '">', '', 'du-date') + '</div>' +
+      field('方式', '<select id="du-method" name="method">' + ['轉帳', '現金', '其他'].map(function (x) {
+        return '<option' + (x === method ? ' selected' : '') + '>' + x + '</option>';
+      }).join('') + '</select>', '', 'du-method') +
+      field('備註（選填）', '<input id="du-note" name="note" maxlength="100" value="' + esc(p ? p.note : '') + '" placeholder="例如：轉帳末五碼 12345">', '', 'du-note') +
+      '<div class="form-actions"><button type="submit" class="btn btn-primary btn-block">' + (p ? '更新繳費紀錄' : '登錄為已繳') + '</button></div>' +
+      (p ? '<button type="button" class="btn btn-ghost is-danger btn-block" data-act="duesUnpay" data-id="' + esc(m.id) + '" data-year="' + year + '">改回未繳</button>' : '') + '</form>';
+  }
+
+  /* ═════════════ 行事曆訂閱 ═════════════ */
+
+  function calSubSheet(f) {
+    return '<h2 class="sheet-title">訂閱活動行事曆<small>訂閱一次，之後新活動、改期、取消都會自動同步</small></h2>' +
+      '<div class="menu">' +
+      '<button type="button" class="menu-item" data-act="openScheme" data-url="' + esc(f.webcal) + '">' + icon('calplus') + '<div><b>iPhone／iPad 行事曆</b><span>按下後選「訂閱」</span></div>' + icon('next', 'chev') + '</button>' +
+      '<button type="button" class="menu-item" data-act="openUrl" data-url="' + esc(f.google) + '">' + icon('calendar') + '<div><b>Google 日曆</b><span>請用電腦開啟這個連結加入，手機會自動同步</span></div>' + icon('next', 'chev') + '</button>' +
+      '<button type="button" class="menu-item" data-act="copyText" data-text="' + esc(f.url) + '">' + icon('copy') + '<div><b>複製訂閱網址</b><span>貼到行事曆的「以網址新增／加入已訂閱的行事曆」</span></div>' + icon('next', 'chev') + '</button>' +
+      '</div>' +
+      '<details class="howto"><summary>iPhone 按了沒反應？</summary><ol><li>先按「複製訂閱網址」</li><li>打開「設定 → 行事曆 → 帳號 → 加入帳號 → 其他」</li><li>選「加入已訂閱的行事曆」，貼上網址</li></ol></details>' +
+      '<p class="hint">行事曆 App 每隔幾小時才會更新一次，剛改的活動可能要等一下。這個網址只給你自己用，裡面看得到你的報名狀態；不小心分享出去可以' +
+      '<button type="button" class="linkbtn is-danger" data-act="resetCal">重設網址</button>，舊的就會失效。</p>';
+  }
+
+  /* ═════════════ 認識我們（招募） ═════════════ */
+
+  var DEFAULT_INTRO = '我們是國際青年商會（JCI）在台中龍井的分會，由 40 歲以下的青年組成。透過公益服務、自我成長訓練與國際交流，一起成為更好的領導者，也認識各行各業的好朋友。歡迎先來參加公開活動，認識我們！';
+
+  function viewJoin() {
+    var me = S.me;
+    var pub = S.events.filter(function (e) { return e.audienceLevel === 0 && e.status === '發布' && !isPast(e); }).slice(0, 4);
+    var html = topbar({ back: 'home', title: '認識我們' }) + '<main class="view view-join">';
+    html += '<section class="join-hero">' + logo('join-logo') + '<h1>' + esc(CFG.ORG_NAME || '') + '</h1><p>' + esc(CFG.ORG_INTRO || DEFAULT_INTRO) + '</p></section>';
+    html += '<ul class="join-points">' + [['users', '各行各業的朋友'], ['flag', '公益服務'], ['chart', '領導力訓練'], ['share', '國際交流']].map(function (x) {
+      return '<li>' + icon(x[0]) + '<span>' + x[1] + '</span></li>';
+    }).join('') + '</ul>';
+    html += '<section class="block"><div class="block-head"><h2>近期公開活動</h2><a href="#/events" data-tab="events">全部活動</a></div>' +
+      (pub.length ? '<div class="rows">' + pub.map(eventRow).join('') + '</div>' : '<p class="muted">近期沒有公開活動，可以先留下聯絡方式，有活動時我們會通知你。</p>') + '</section>';
+    if (me.member) {
+      html += '<section class="block card"><h2>你已經是會員了</h2><p class="muted">歡迎把這一頁分享給想認識我們的朋友。</p>' +
+        '<button type="button" class="btn btn-ghost btn-block" data-act="poster">' + icon('qr') + '開啟招募海報（可列印）</button></section>';
+    } else if (me.pendingRequest) {
+      html += '<section class="block card"><h2>已收到你的資料</h2><p class="muted">我們會盡快和你聯絡，謝謝你！</p></section>';
+    } else {
+      html += '<section class="block card" id="join-form"><h2>想進一步認識？</h2><p class="muted">留下姓名與手機，秘書處會和你聯絡，邀請你參加活動。已經是會員的人填入會資料，會直接完成綁定。</p>' +
+        '<form class="form" data-form="joinRequest" novalidate>' +
+        field('姓名', '<input id="j-name" name="name" autocomplete="name" required>', '', 'j-name') +
+        field('手機', '<input id="j-phone" name="phone" type="tel" inputmode="tel" autocomplete="tel" required placeholder="0912345678">', '', 'j-phone') +
+        field('想說的話（選填）', '<textarea id="j-note" name="note" rows="2" maxlength="200" placeholder="例如：朋友介紹、想參加淨灘"></textarea>', '', 'j-note') +
+        '<button type="submit" class="btn btn-primary btn-block">送出</button></form></section>';
+      if (S.friend === false && (Api.addFriendUrl() || S.demo)) {
+        html += '<button type="button" class="btn btn-line btn-block" data-act="addFriend" style="height:48px">' + icon('chat') + '加入官方帳號，收到活動消息</button>';
+      }
+    }
+    return html + '</main>';
+  }
+
+  /* ═════════════ 出席報表 ═════════════ */
+
+  function attEventsTab(d) {
+    if (!d.events.length) return empty('這一年還沒有已舉行的活動', '');
+    var out = '', month = '';
+    d.events.slice().reverse().forEach(function (e) {
+      var t = tp(e.start);
+      var m = t.y + ' 年 ' + t.m + ' 月';
+      if (m !== month) { out += (month ? '</div>' : '') + '<h3 class="month">' + m + '</h3><div class="rows">'; month = m; }
+      var pct = e.registered ? Math.round(e.attended / e.registered * 100) : 0;
+      out += '<a class="erow att-ev" href="#/event/' + encodeURIComponent(e.id) + '" data-nav><div class="erow-date' + weekendCls(t) + '"><span class="erow-m">' + t.m + '月</span><b>' + t.d +
+        '</b><span class="erow-w">週' + WD[t.w] + '</span></div><div class="erow-body">' + catTag(e.category) + (e.meeting ? '<span class="tag tag-meet">計入例會</span>' : '') +
+        '<div class="erow-title">' + esc(e.title) + '</div><div class="erow-meta">報到 <b>' + e.attended + '</b> 人／報名 ' + e.registered + ' 人</div>' +
+        (e.registered ? '<span class="capbar"><i style="width:' + pct + '%"></i></span>' : '') + '</div></a>';
+    });
+    return out + '</div>';
+  }
+  function attPerfectTab(d) {
+    if (!d.meetingTotal) return empty('這一年還沒有舉行例會', '');
+    var full = d.members.filter(function (m) { return m.meetingAttended >= d.meetingTotal; }).sort(byName);
+    var ranked = d.members.filter(function (m) { return m.meetingAttended > 0; }).slice().sort(function (a, b) {
+      return (b.meetingAttended - a.meetingAttended) || (b.otherAttended - a.otherAttended) || byName(a, b);
+    }).slice(0, 10);
+    return '<section class="block"><h3 class="month">例會全勤<small>' + full.length + ' 位（共 ' + d.meetingTotal + ' 場）</small></h3>' +
+      (full.length ? '<div class="names award">' + full.map(function (m) { return '<span>' + icon('award') + esc(m.name) + '</span>'; }).join('') + '</div>' : '<p class="muted">目前沒有人全勤。</p>') +
+      '</section><section class="block"><h3 class="month">例會出席排行</h3><ol class="rank">' + ranked.map(function (m) {
+        return '<li><b>' + esc(m.name) + '</b><span>' + esc(m.role) + '</span><em>' + m.meetingAttended + '／' + d.meetingTotal + '</em></li>';
+      }).join('') + '</ol></section>';
+  }
+
   /* ═════════════ 主要 render ═════════════ */
 
   var VIEWS = {
@@ -1635,7 +1939,7 @@
     news: function (r) { return r.a ? viewNewsItem(r) : viewNews(); },
     'news-edit': viewNewsEdit, directory: viewDirectory, me: viewMe, checkin: viewCheckin,
     docs: viewDocs, 'doc-edit': viewDocEdit,
-    polls: viewPolls, poll: viewPoll, 'poll-edit': viewPollEdit, officers: viewOfficers,
+    polls: viewPolls, poll: viewPoll, 'poll-edit': viewPollEdit, officers: viewOfficers, join: viewJoin,
     admin: function (r) {
       if (r.a === 'push') return viewPush();
       if (r.a === 'members') return viewMembers();
@@ -1643,6 +1947,8 @@
       if (r.a === 'attendance') return viewAttendance();
       if (r.a === 'prospects') return viewProspects();
       if (r.a === 'handover') return viewHandover();
+      if (r.a === 'dues') return viewDues();
+      if (r.a === 'audit') return viewAudit();
       return viewMe();
     }
   };
@@ -1661,7 +1967,7 @@
     var focusSel = null;
     var ae = document.activeElement;
     if (ae && ae.matches && ae.matches('input[data-filter]')) focusSel = 'input[data-filter="' + ae.getAttribute('data-filter') + '"]';
-    $app.innerHTML = demoBar() + html;
+    $app.innerHTML = demoBar() + versionBar() + html;
     var isRoot = !!ROOTS[r.name] && !(r.name === 'news' && r.a);
     renderTabbar(r, isRoot);
     document.body.classList.toggle('has-tabbar', isRoot);
@@ -1778,12 +2084,16 @@
 
   /** 條文要捲到最底才能勾選；內容本來就放得下時直接開放 */
   function armTermsGate() {
-    var box = document.getElementById('terms'), cb = document.getElementById('agree-box'), hint = document.getElementById('terms-hint');
-    if (!box || !cb) return;
+    var box = document.getElementById('terms'), hint = document.getElementById('terms-hint');
+    var cbs = document.querySelectorAll('.consent-cb'), sb = document.querySelector('form[data-form="phoneConsent"] button[type=submit]');
+    if (!box || !cbs.length) return;
     function unlock() {
-      cb.disabled = false;
-      cb.closest('.check').classList.remove('is-gated');
-      if (hint) hint.textContent = '已讀完說明，可以勾選同意。';
+      Array.prototype.forEach.call(cbs, function (cb) {
+        if (!cb.getAttribute('data-locked')) cb.disabled = false;
+        cb.closest('.check').classList.remove('is-gated');
+      });
+      if (sb) sb.disabled = false;
+      if (hint) hint.textContent = '已讀完說明，勾選即表示同意。';
       box.removeEventListener('scroll', check);
     }
     function check() {
@@ -1965,29 +2275,22 @@
     phoneConsent: function () {
       var m = S.me.member;
       if (!m) return;
-      if (m.phoneConsent) {
-        confirmSheet({ title: '撤回同意？', body: '撤回後，通訊錄立即不再顯示你的電話。之後想重新顯示，需要再閱讀一次說明並同意。', ok: '撤回同意', cancel: '保留', danger: true })
-          .then(function (fd) {
-            if (!fd) return;
-            return Api.call('phoneConsent', { agree: false }).then(function (me) {
-              S.me = me;
-              delete S.cache.directory;
-              render();
-              toast('已撤回，通訊錄不再顯示你的電話');
-            });
-          }).catch(fail);
-        return;
-      }
-      openSheet('<h2 class="sheet-title">同意顯示電話於通訊錄<small>請先讀完以下說明</small></h2>' +
+      var gated = !m.phoneConsent && !m.emailConsent; // 第一次同意要先讀完說明；之後調整不用重讀
+      var cb = function (name, on, label, sub, disabled) {
+        return '<label class="check' + (gated ? ' is-gated' : '') + '"><input type="checkbox" name="' + name + '" class="consent-cb"' + (on ? ' checked' : '') +
+          (gated || disabled ? ' disabled' : '') + (disabled ? ' data-locked="1"' : '') + '><span>' + label + '<small>' + sub + '</small></span></label>';
+      };
+      openSheet('<h2 class="sheet-title">通訊錄顯示我的聯絡方式<small>' + (gated ? '請先讀完以下說明' : '勾選要讓會友看到的項目') + '</small></h2>' +
         '<div class="terms" id="terms" tabindex="0" aria-label="個人電話資訊使用說明">' +
         '<p class="terms-head">個人電話資訊使用說明（' + esc(PHONE_TERMS_VERSION) + ' 版）</p><ol>' +
         PHONE_TERMS.map(function (t) { return '<li><b>' + esc(t[0]) + '</b>' + esc(t[1]) + '</li>'; }).join('') +
         '</ol><p class="terms-end">— 以上說明到此結束 —</p></div>' +
-        '<p class="hint" id="terms-hint">請將說明捲動到最後，才能勾選同意。</p>' +
+        (gated ? '<p class="hint" id="terms-hint">請將說明捲動到最後，才能勾選。</p>' : '<p class="hint" id="terms-hint">勾選即表示同意上述說明。</p>') +
         '<form class="form" data-form="phoneConsent" novalidate>' +
-        '<label class="check is-gated"><input type="checkbox" name="agree" id="agree-box" disabled><span>我已閱讀並同意上述說明，願意將我的電話顯示於本會會員通訊錄，僅供本會會友查閱。</span></label>' +
-        '<div class="form-actions"><button type="submit" class="btn btn-primary btn-block" disabled>同意並顯示電話</button></div></form>', '同意顯示電話');
-      setTimeout(armTermsGate, 50);
+        cb('phone', !!m.phoneConsent, '顯示我的手機', esc(m.phone), false) +
+        cb('email', !!m.emailConsent, '顯示我的 Email', m.email ? esc(m.email) : '你還沒有填 Email，可以先在「我的資料 → 編輯」補上', !m.email) +
+        '<div class="form-actions"><button type="submit" class="btn btn-primary btn-block"' + (gated ? ' disabled' : '') + '>儲存</button></div></form>', '通訊錄顯示設定');
+      if (gated) setTimeout(armTermsGate, 50);
     },
     deleteDoc: function (el) {
       var id = el.getAttribute('data-id');
@@ -2059,7 +2362,7 @@
       openSheet('<h2 class="sheet-title">加入行事曆<small>' + esc(ev.title) + '</small></h2><div class="menu">' +
         '<button type="button" class="menu-item" data-act="openUrl" data-url="' + esc(g) + '">' + icon('calendar') + '<div><b>Google 日曆</b><span>Android 手機、或有安裝 Google 日曆</span></div>' + icon('next', 'chev') + '</button>' +
         (ev.icsUrl ? '<button type="button" class="menu-item" data-act="openUrl" data-url="' + esc(ev.icsUrl) + '">' + icon('calplus') + '<div><b>iPhone 行事曆</b><span>下載行事曆檔後按「加入」</span></div>' + icon('next', 'chev') + '</button>' : '') +
-        '</div>', '加入行事曆');
+        '</div>' + (S.me.member ? '<p class="hint" style="margin-top:12px">不想每場都加一次？<button type="button" class="linkbtn" data-act="subscribeCal">訂閱活動行事曆</button>，所有活動自動同步。</p>' : ''), '加入行事曆');
     },
     openUrl: function (el) {
       closeSheet();
@@ -2068,7 +2371,8 @@
     checkinQr: function (el) {
       var id = el.getAttribute('data-id');
       var ev = findEvent(id);
-      busy(el, Api.call('checkinQr', { eventId: id, renew: el.getAttribute('data-renew') === '1' })).then(function (q) {
+      busy(el, Promise.all([needQr(), Api.call('checkinQr', { eventId: id, renew: el.getAttribute('data-renew') === '1' })])).then(function (res) {
+        var q = res[1];
         if (ev) { ev.checkin = { code: q.code, url: q.url }; }
         openSheet(qrSheet(ev, q), '報到 QR code');
       }).catch(fail);
@@ -2176,6 +2480,10 @@
         Object.assign(S.push, { mode: type === 'unreplied' ? 'eventUnreplied' : 'event', eventId: id, linkType: 'event', linkId: id,
           title: ev ? (type === 'unreplied' ? '請回覆：' + ev.title : ev.title + ' 通知') : '',
           text: ev && type === 'unreplied' ? fmtWhen(ev.start, ev.end) + (ev.location ? ' ' + ev.location : '') + '\n請到會員專區回覆出席或請假，謝謝。' : '' });
+      } else if (type === 'dues') {
+        var dd = S.cache['dues:' + id];
+        Object.assign(S.push, { mode: 'duesUnpaid', duesYear: id, linkType: 'home', title: id + ' 年度會費繳交提醒',
+          text: '提醒您 ' + id + ' 年度會費尚未繳交' + (dd && dd.note ? '。\n' + dd.note : '，繳費方式請洽財務長。') + '\n已繳交者請忽略，謝謝！' });
       } else if (type === 'poll') {
         var pl = S.cache['poll:' + id] || S.polls.filter(function (x) { return x.id === id; })[0];
         Object.assign(S.push, { mode: 'pollUnvoted', pollId: id, linkType: 'poll', linkId: id,
@@ -2203,6 +2511,75 @@
           });
         }).catch(fail);
       }, 240);
+    },
+    hardReload: function () {
+      var q = new URLSearchParams(location.search);
+      q.set('v', String(Date.now()));
+      location.replace(location.pathname + '?' + q.toString() + location.hash);
+    },
+    attTab: function (el) { S.attTab = el.getAttribute('data-v'); render(); },
+    exportAtt: function (el) {
+      busy(el, Api.call('exportAttendance', { year: Number(el.getAttribute('data-year')) })).then(function (res) {
+        if (res.demo) { toast('示範模式：正式版會在試算表建立「' + res.name + '」工作表'); return; }
+        toast('已匯出到試算表「' + res.name + '」');
+        Api.openExternal(res.url);
+      }).catch(fail);
+    },
+    subscribeCal: function (el) {
+      busy(el, Api.call('calendarFeed')).then(function (f) {
+        closeSheet();
+        setTimeout(function () { openSheet(calSubSheet(f), '訂閱活動行事曆'); }, $layer.hidden ? 0 : 240);
+      }).catch(fail);
+    },
+    resetCal: function () {
+      closeSheet();
+      setTimeout(function () {
+        confirmSheet({ title: '重設訂閱網址？', body: '舊的網址會立刻失效，已經訂閱的行事曆要用新網址重新訂閱。', ok: '重設', danger: true }).then(function (fd) {
+          if (!fd) return;
+          return Api.call('calendarFeed', { reset: true }).then(function (f) {
+            openSheet(calSubSheet(f), '訂閱活動行事曆');
+            toast('已換新網址');
+          });
+        }).catch(fail);
+      }, 240);
+    },
+    openScheme: function (el) {
+      var url = el.getAttribute('data-url');
+      closeSheet();
+      if (S.demo) { toast('示範模式：正式版會開啟 iPhone 行事曆的訂閱畫面'); return; }
+      window.location.href = url;
+    },
+    poster: function () {
+      var url = new URL('poster.html?type=join', location.href).toString();
+      Api.openExternal(url);
+    },
+    duesYear: function (el) { S.duesYear = Number(el.getAttribute('data-v')); render(); },
+    duesFilter: function (el) { S.duesFilter = el.getAttribute('data-v'); render(); },
+    duesEdit: function (el) {
+      var year = Number(el.getAttribute('data-year'));
+      var d = S.cache['dues:' + year];
+      var m = d && d.members ? d.members.filter(function (x) { return x.id === el.getAttribute('data-id'); })[0] : null;
+      if (m) openSheet(duesSheet(m, year), '登錄會費');
+    },
+    duesUnpay: function (el) {
+      var id = el.getAttribute('data-id'), year = Number(el.getAttribute('data-year'));
+      closeSheet();
+      setTimeout(function () {
+        confirmSheet({ title: '改回未繳？', body: '這筆 ' + year + ' 年度的繳費紀錄會刪除。', ok: '改回未繳', danger: true }).then(function (fd) {
+          if (!fd) return;
+          return Api.call('setDues', { year: year, memberId: id, paid: false }).then(function (res) {
+            S.cache['dues:' + year] = res;
+            render();
+            toast('已改回未繳');
+          });
+        }).catch(fail);
+      }, 240);
+    },
+    copyUnpaid: function (el) {
+      var d = S.cache['dues:' + el.getAttribute('data-year')];
+      if (!d || !d.members) return;
+      var list = d.members.filter(function (m) { return m.required && !m.paid; }).sort(byLevelThenName);
+      copyText(d.year + ' 年度會費未繳（' + list.length + ' 位）\n' + list.map(function (m) { return m.name + (m.amount ? '　' + money(m.amount) : ''); }).join('\n'));
     },
     evView: function (el) {
       S.evView = el.getAttribute('data-v') === 'month' ? 'month' : 'list';
@@ -2517,15 +2894,41 @@
       }).catch(fail);
     },
     phoneConsent: function (form, btn) {
-      var cb = form.querySelector('#agree-box');
-      if (!cb || cb.disabled) { toast('請先把說明捲動到最後', 'error'); return; }
-      if (!cb.checked) { toast('請勾選同意', 'error'); return; }
-      busy(btn, Api.call('phoneConsent', { agree: true, version: PHONE_TERMS_VERSION })).then(function (me) {
+      var ph = form.querySelector('input[name=phone]'), em = form.querySelector('input[name=email]');
+      if (ph.disabled && !ph.getAttribute('data-locked')) { toast('請先把說明捲動到最後', 'error'); return; }
+      var data = { phone: ph.checked, email: em.checked, version: PHONE_TERMS_VERSION };
+      busy(btn, Api.call('phoneConsent', data)).then(function (me) {
         S.me = me;
         delete S.cache.directory;
         closeSheet();
         render();
-        toast('已同意，通訊錄會顯示你的電話');
+        var shown = [data.phone ? '電話' : '', data.email ? 'Email' : ''].filter(Boolean);
+        toast(shown.length ? '已儲存，通訊錄會顯示你的' + shown.join('、') : '已儲存，通訊錄不顯示你的電話與 Email');
+      }).catch(fail);
+    },
+    dues: function (form, btn) {
+      var fd = new FormData(form);
+      var year = Number(fd.get('year'));
+      var data = { year: year, memberId: fd.get('memberId'), paid: true, amount: fd.get('amount'), paidAt: fd.get('paidAt'), method: fd.get('method'), note: fd.get('note') };
+      busy(btn, Api.call('setDues', data)).then(function (res) {
+        S.cache['dues:' + year] = res;
+        closeSheet();
+        render();
+        toast('已登錄');
+        if (S.me.member && data.memberId === S.me.member.id) Api.call('init').then(function (d) { S.me = d.me; }).catch(function () {});
+      }).catch(fail);
+    },
+    joinRequest: function (form, btn) {
+      var fd = new FormData(form);
+      var name = String(fd.get('name') || '').trim(), phone = String(fd.get('phone') || '').trim();
+      if (!name || !phone) { toast('請填寫姓名與手機', 'error'); return; }
+      busy(btn, Api.call('bind', { name: name, phone: phone, note: '［認識我們頁面］' + (fd.get('note') || ''), request: true })).then(function (res) {
+        if (res.status === 'bound') {
+          return reloadAll().then(function () { go('home', true); toast('你已經是會員，已完成綁定'); });
+        }
+        if (res.me) S.me = res.me;
+        render();
+        toast('已送出，我們會盡快和你聯絡');
       }).catch(fail);
     },
     updateMe: function (form, btn) {
@@ -2683,6 +3086,19 @@
       if (wl && S.walkinCands) wl.innerHTML = walkinRows(S.walkinCands, t.value);
       return;
     }
+    if (f === 'audit') {
+      S.auditQuery = t.value;
+      var al = document.getElementById('audit-list');
+      if (al && Array.isArray(S.cache.audit)) al.innerHTML = auditRows(S.cache.audit);
+      return;
+    }
+    if (f === 'dues') {
+      S.duesQuery = t.value;
+      var dl = document.getElementById('dues-list'), dd = S.cache['dues:' + (S.duesYear || '')];
+      if (!dd) Object.keys(S.cache).forEach(function (k) { if (k.indexOf('dues:') === 0) dd = S.cache[k]; });
+      if (dl && dd && dd.members) dl.innerHTML = duesRows(dd);
+      return;
+    }
     if (f === 'ho') {
       var hq = t.value.trim().toLowerCase();
       document.querySelectorAll('.ho-row').forEach(function (row) {
@@ -2705,7 +3121,7 @@
       if (lp) lp.innerHTML = linePreview(S.push);
       var c = document.getElementById('p-count');
       if (c) c.textContent = S.push.text.length;
-      if (t.name === 'mode' || t.name === 'roles' || t.name === 'eventId' || t.name === 'eventId2') refreshPushPreview();
+      if (t.name === 'mode' || t.name === 'roles' || t.name === 'eventId' || t.name === 'eventId2' || t.name === 'pollId' || t.name === 'duesYear') refreshPushPreview();
     }
   });
   document.addEventListener('change', function (e) {
@@ -2757,6 +3173,7 @@
   function start() {
     window.__appStarted = true;
     $app.innerHTML = bootScreen();
+    Api.onRetry = function (action, n) { if (n === 1) toast('使用的人比較多，正在重試…'); };
     Api.init().then(function (info) {
       S.demo = info.demo;
       document.body.classList.toggle('is-demo', S.demo);
@@ -2766,14 +3183,34 @@
         var qs = q.toString();
         history.replaceState(null, '', location.pathname + (qs ? '?' + qs : '') + '#/' + info.deepLink);
       }
+      // 先用這支手機上次的資料畫出畫面，背景再更新（開啟時不用等伺服器）
+      var cached = loadInitCache();
+      if (cached) {
+        applyInit(cached);
+        S.stale = true;
+        S.ready = true;
+        document.body.classList.add('is-ready');
+        render();
+      }
       return Promise.all([Api.call('init'), Api.friendship()]);
     }).then(function (r) {
-      applyInit(r[0]);
+      var wasStale = S.stale;
+      applyInit(r[0], wasStale);
+      saveInitCache(r[0]);
       S.friend = r[1];
+      S.stale = false;
       S.ready = true;
       document.body.classList.add('is-ready');
       render();
-    }).catch(fatal);
+    }).catch(function (e) {
+      if (S.ready && S.stale) {
+        S.stale = false;
+        render();
+        toast((e && e.message ? e.message : '連不上伺服器') + '（目前顯示的是上次的資料）', 'error');
+        return;
+      }
+      fatal(e);
+    });
   }
 
   start();

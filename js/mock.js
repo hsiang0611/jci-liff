@@ -8,16 +8,16 @@ window.Mock = (function () {
   'use strict';
 
   var DAY = 86400000;
-  var P = function (d, e, n, r, p, m) {
-    return { directory: d, eventManage: e, newsManage: n, viewRegs: r, push: p, memberManage: m };
+  var P = function (d, e, n, r, p, m, f) {
+    return { directory: d, eventManage: e, newsManage: n, viewRegs: r, push: p, memberManage: m, duesManage: f };
   };
   var ROLES = [
-    { role: '管理員', level: 90, desc: '會長、秘書長、秘書處', perms: P(1, 1, 1, 1, 1, 1) },
-    { role: '幹部', level: 70, desc: '副會長、理監事、主委', perms: P(1, 1, 1, 1, 0, 0) },
-    { role: '會員', level: 50, desc: '正式會員', perms: P(1, 0, 0, 0, 0, 0) },
-    { role: '特友', level: 40, desc: '特友會', perms: P(1, 0, 0, 0, 0, 0) },
-    { role: '預備會員', level: 20, desc: '新朋友、輔導入會中', perms: P(0, 0, 0, 0, 0, 0) },
-    { role: '訪客', level: 0, desc: '未綁定的 LINE 使用者', perms: P(0, 0, 0, 0, 0, 0) }
+    { role: '管理員', level: 90, desc: '會長、秘書長、秘書處', perms: P(1, 1, 1, 1, 1, 1, 1) },
+    { role: '幹部', level: 70, desc: '副會長、理監事、主委', perms: P(1, 1, 1, 1, 0, 0, 0) },
+    { role: '會員', level: 50, desc: '正式會員', perms: P(1, 0, 0, 0, 0, 0, 0) },
+    { role: '特友', level: 40, desc: '特友會', perms: P(1, 0, 0, 0, 0, 0, 0) },
+    { role: '預備會員', level: 20, desc: '新朋友、輔導入會中', perms: P(0, 0, 0, 0, 0, 0, 0) },
+    { role: '訪客', level: 0, desc: '未綁定的 LINE 使用者', perms: P(0, 0, 0, 0, 0, 0, 0) }
   ];
   ROLES.forEach(function (r) { for (var k in r.perms) r.perms[k] = !!r.perms[k]; });
   var BY = {};
@@ -81,7 +81,8 @@ window.Mock = (function () {
     var m = function (id, name, phone, role, title, company, year, uid, industry, bday) {
       return { id: id, name: name, phone: phone, role: role, title: title, company: company, industry: industry || '', email: '',
         birthday: bday || '', joinYear: year, status: '啟用', lineUid: uid || '', lineName: '', boundAt: uid ? at(-60, 10) : '',
-        phoneConsent: (uid && id !== 'M001' && id !== 'M008') ? at(-50, 10) : '' };
+        phoneConsent: (uid && id !== 'M001' && id !== 'M008') ? at(-50, 10) : '',
+        emailConsent: (uid && ['M002', 'M004', 'M006'].indexOf(id) >= 0) ? at(-40, 10) : '', calKey: '' };
     };
     var md = function (d) { return '1990-' + (thisMonth < 10 ? '0' : '') + thisMonth + '-' + (d < 10 ? '0' : '') + d; };
     db = {
@@ -179,6 +180,28 @@ window.Mock = (function () {
     for (var g = 0; g < 9; g++) {
       db.regs.push({ id: 'R-g' + g, eventId: 'E2', memberId: '', name: '來賓' + (g + 1), phone: '09330000' + (10 + g), lineUid: 'U-guest-' + g, count: 2, note: '', status: '報名', createdAt: at(-3, 10 + g) });
     }
+    // Email（只有同意的人會顯示在通訊錄）
+    [['M002', 'yijun@example.com'], ['M004', 'ivy.bakery@example.com'], ['M005', 'zhihao.water@example.com'], ['M006', 'shanshan@example.com']].forEach(function (x) {
+      db.members.filter(function (mm) { return mm.id === x[0]; })[0].email = x[1];
+    });
+    // 會費：今年部分已繳
+    var cy = new Date().getFullYear();
+    db.duesRules = [
+      { role: '管理員', amount: 6000, desc: '轉帳：土地銀行龍井分行 012-345-678901，戶名：龍井國際青年商會。轉帳後請告知財務長末五碼。' },
+      { role: '幹部', amount: 6000, desc: '' }, { role: '會員', amount: 6000, desc: '' }, { role: '特友', amount: 3000, desc: '' }
+    ];
+    db.dues = [
+      { year: cy, memberId: 'M001', name: '王建宏', amount: 6000, paidAt: at(-260, 10), method: '轉帳', note: '', recordedBy: '李承翰' },
+      { year: cy, memberId: 'M002', name: '陳怡君', amount: 6000, paidAt: at(-255, 10), method: '轉帳', note: '', recordedBy: '李承翰' },
+      { year: cy, memberId: 'M003', name: '李承翰', amount: 6000, paidAt: at(-250, 10), method: '現金', note: '例會現場', recordedBy: '李承翰' },
+      { year: cy, memberId: 'M006', name: '吳佩珊', amount: 6000, paidAt: at(-200, 10), method: '轉帳', note: '', recordedBy: '李承翰' },
+      { year: cy, memberId: 'M007', name: '黃國明', amount: 3000, paidAt: at(-240, 10), method: '現金', note: '', recordedBy: '李承翰' }
+    ];
+    db.audit = [
+      { time: at(-3, 21, 40), actor: '陳怡君', action: '修改會員', target: '吳佩珊（M006）', detail: '職稱 （空白） → 公關主委' },
+      { time: at(-2, 10, 5), actor: '王建宏', action: '綁定審核', target: '許文彥', detail: '綁到既有會員 M011' },
+      { time: at(-1, 15, 12), actor: '陳怡君', action: '預約推播', target: '例會提醒：後天晚上 7 點', detail: '會員以上' }
+    ];
     // 張雅婷（預備會員）入會進度：例會 1 次、公益服務 1 次
     addReg('E10', db.members[7], 1, '', at(-45, 7, 50));
     addReg('E6', db.members[7], 1, '', at(-16, 18, 52));
@@ -196,6 +219,35 @@ window.Mock = (function () {
     });
     friend = {};
     Object.keys(IDENTITY).forEach(function (k) { friend[k] = k !== '訪客'; });
+  }
+  function audit(c, action, target, detail) {
+    db.audit.push({ time: new Date().toISOString(), actor: c.member ? c.member.name : c.lineName, action: action, target: target, detail: detail || '' });
+  }
+  function duesRule(role) { return db.duesRules.filter(function (r) { return r.role === role; })[0] || null; }
+  function duesNote() { var r = db.duesRules.filter(function (x) { return x.desc; })[0]; return r ? r.desc : ''; }
+  function duesRec(year, id) { return db.dues.filter(function (r) { return r.year === year && r.memberId === id; })[0] || null; }
+  function paidOut(r) { return r ? { amount: r.amount, paidAt: r.paidAt, method: r.method, note: r.note, recordedBy: r.recordedBy } : null; }
+  function memberDues(m) {
+    var cy = new Date().getFullYear(), years = [cy], out = [];
+    if (new Date().getMonth() + 1 >= 10) years.push(cy + 1);
+    years.forEach(function (y) {
+      var rule = duesRule(m.role), rec = duesRec(y, m.id);
+      if (!rule && !rec) return;
+      out.push({ year: y, required: !!rule, amount: rule ? rule.amount : null, desc: (rule && rule.desc) || duesNote(), paid: paidOut(rec) });
+    });
+    return out;
+  }
+  function duesList(c, year) {
+    var members = db.members.filter(function (m) { return duesRec(year, m.id) || (m.status !== '停用' && duesRule(m.role)); }).map(function (m) {
+      var rule = duesRule(m.role);
+      return { id: m.id, name: m.name, role: m.role, title: m.title, level: (BY[m.role] || {}).level || 0, bound: !!m.lineUid, active: m.status !== '停用',
+        required: !!rule && m.status !== '停用', amount: rule ? rule.amount : null, paid: paidOut(duesRec(year, m.id)) };
+    });
+    var req = members.filter(function (m) { return m.required; });
+    var collected = members.reduce(function (s, m) { return s + (m.paid && m.paid.amount ? m.paid.amount : 0); }, 0);
+    var cy = new Date().getFullYear();
+    return { year: year, years: [cy - 1, cy, cy + 1], rules: clone(db.duesRules), note: duesNote(), members: members,
+      totals: { required: req.length, paid: req.filter(function (m) { return m.paid; }).length, unpaid: req.filter(function (m) { return !m.paid; }).length, collected: collected } };
   }
   function shop(id, name, intro, address, hours, offer, url) {
     var mem = db.members.filter(function (x) { return x.id === id; })[0];
@@ -235,7 +287,8 @@ window.Mock = (function () {
       uid: c.uid, lineName: c.lineName, picture: '', bound: !!c.member, disabled: c.disabled,
       role: c.roleName, level: c.level, perms: clone(c.perms),
       member: c.member ? { id: c.member.id, name: c.member.name, phone: c.member.phone, title: c.member.title, company: c.member.company, industry: c.member.industry,
-        email: c.member.email, birthday: c.member.birthday, joinYear: c.member.joinYear, phoneConsent: c.member.phoneConsent || '', shop: shopOut(c.member) } : null,
+        email: c.member.email, birthday: c.member.birthday, joinYear: c.member.joinYear, phoneConsent: c.member.phoneConsent || '', emailConsent: c.member.emailConsent || '', shop: shopOut(c.member) } : null,
+      dues: c.member ? memberDues(c.member) : [],
       attendance: c.member ? memberAttendance(c.member.id, attendanceIndex(new Date().getFullYear())) : null,
       progress: c.member ? progressFor(c.member) : null,
       pendingRequest: !c.member && pend ? { id: pend.id, name: pend.name, createdAt: pend.createdAt } : null
@@ -497,6 +550,11 @@ window.Mock = (function () {
       membersAtLevel(lvl).forEach(function (m) { if (!replied[m.id] && !replied['u:' + m.lineUid]) add(m.lineUid); });
       return { uids: uids, label: '「' + e.title + '」未回覆者' };
     }
+    if (mode === 'duesUnpaid') {
+      var yr = Number(aud.year) || new Date().getFullYear();
+      db.members.forEach(function (m) { if (m.status !== '停用' && m.lineUid && duesRule(m.role) && !duesRec(yr, m.id)) add(m.lineUid); });
+      return { uids: uids, label: yr + ' 年度會費未繳者' };
+    }
     if (mode === 'pollUnvoted') {
       var p = db.polls.filter(function (x) { return x.id === aud.pollId; })[0];
       if (!p) throw err('NOT_FOUND', '找不到這份調查');
@@ -555,6 +613,7 @@ window.Mock = (function () {
   var A = {
     init: function (c) {
       var o = {
+        version: window.APP_VERSION || '',
         me: meOut(c),
         roles: ROLES.map(function (r) { return { role: r.role, level: r.level, desc: r.desc }; }),
         events: visibleEvents(c), news: visibleNews(c),
@@ -602,7 +661,10 @@ window.Mock = (function () {
     },
     phoneConsent: function (c, d) {
       if (!c.member) throw err('FORBIDDEN', '請先完成會員綁定');
-      c.member.phoneConsent = d.agree ? new Date().toISOString() : '';
+      var now = new Date().toISOString();
+      var phone = d.phone !== undefined ? !!d.phone : !!d.agree;
+      c.member.phoneConsent = phone ? (c.member.phoneConsent || now) : '';
+      if (d.email !== undefined) c.member.emailConsent = d.email ? (c.member.emailConsent || now) : '';
       return meOut(ctx());
     },
     register: function (c, d) {
@@ -693,7 +755,48 @@ window.Mock = (function () {
         var a = memberAttendance(m.id, idx);
         return { id: m.id, name: m.name, role: m.role, level: BY[m.role].level, meetingAttended: a.meetingAttended, otherAttended: a.otherAttended };
       }).sort(function (a, b) { return (b.level - a.level) || (b.meetingAttended - a.meetingAttended) || (b.otherAttended - a.otherAttended); });
-      return { year: year, meetingTotal: idx.meetingTotal, otherTotal: idx.otherTotal, members: members };
+      var events = db.events.filter(function (e) {
+        var s = new Date(e.start);
+        return e.status === '發布' && s.getFullYear() === year && s.getTime() <= Date.now();
+      }).map(function (e) {
+        var regs = activeRegs(e.id).filter(attending);
+        return { id: e.id, title: e.title, start: e.start, category: e.category, meeting: MEETING_CATS.indexOf(e.category) >= 0,
+          attended: regs.filter(function (r) { return r.attended; }).length, registered: regs.length };
+      }).sort(function (a, b) { return a.start.localeCompare(b.start); });
+      var cy = new Date().getFullYear();
+      return { year: year, meetingTotal: idx.meetingTotal, otherTotal: idx.otherTotal, members: members, events: events, years: [cy, cy - 1] };
+    },
+    exportAttendance: function (c, d) {
+      var year = Math.floor(Number(d.year)) || new Date().getFullYear();
+      audit(c, '匯出出席報表', year + ' 出席報表', '');
+      return { name: year + ' 出席報表', url: 'https://docs.google.com/spreadsheets/d/demo#gid=1', demo: true };
+    },
+    auditLog: function () { return clone(db.audit).reverse(); },
+    dues: function (c, d) { return duesList(c, Math.floor(Number(d.year)) || new Date().getFullYear()); },
+    setDues: function (c, d) {
+      var year = Math.floor(Number(d.year)) || new Date().getFullYear();
+      if (year < 2000 || year > 2100) throw err('INVALID', '年度不正確');
+      var m = membersById(d.memberId);
+      if (!m) throw err('NOT_FOUND', '找不到這位會員');
+      var rec = duesRec(year, m.id);
+      if (!d.paid) {
+        if (rec) { db.dues = db.dues.filter(function (r) { return r !== rec; }); audit(c, '取消會費紀錄', m.name + '（' + m.id + '）', year + ' 年度'); }
+        return duesList(c, year);
+      }
+      var amt = String(d.amount === undefined || d.amount === null ? '' : d.amount).replace(/[^\d.]/g, '');
+      var paidAt = d.paidAt ? new Date(d.paidAt + 'T12:00:00+08:00') : new Date();
+      if (isNaN(paidAt.getTime())) throw err('INVALID', '繳費日期不正確');
+      var row = { year: year, memberId: m.id, name: m.name, amount: amt === '' ? null : Number(amt), paidAt: paidAt.toISOString(), method: d.method || '', note: d.note || '', recordedBy: c.member.name };
+      if (rec) Object.assign(rec, row); else db.dues.push(row);
+      audit(c, '登錄會費', m.name + '（' + m.id + '）', year + ' 年度' + (row.amount !== null ? ' ' + row.amount + ' 元' : '') + (row.method ? '　' + row.method : ''));
+      return duesList(c, year);
+    },
+    calendarFeed: function (c, d) {
+      if (!c.member) throw err('FORBIDDEN', '請先完成會員綁定');
+      if (!c.member.calKey || d.reset) c.member.calKey = uid4() + uid4() + uid4() + uid4();
+      var url = 'https://script.google.com/macros/s/DEMO/exec?cal=' + c.member.id + '.' + c.member.calKey;
+      var webcal = url.replace(/^https:/, 'webcal:');
+      return { url: url, webcal: webcal, google: 'https://calendar.google.com/calendar/render?cid=' + encodeURIComponent(webcal), reset: !!d.reset, demo: true };
     },
     saveDoc: function (c, d) {
       var x = d.doc || {};
@@ -722,7 +825,8 @@ window.Mock = (function () {
       return db.members.filter(function (m) { return m.status !== '停用'; }).map(function (m) {
         var r = BY[m.role];
         return { id: m.id, name: m.name, role: m.role, level: r ? r.level : 0, title: m.title, company: m.company, industry: m.industry || '',
-          phone: m.phoneConsent ? m.phone : '', phoneHidden: !m.phoneConsent, email: m.email, joinYear: m.joinYear, shop: shopOut(m) };
+          phone: m.phoneConsent ? m.phone : '', phoneHidden: !m.phoneConsent, email: m.emailConsent ? m.email : '', emailHidden: !m.emailConsent && !!m.email,
+          joinYear: m.joinYear, shop: shopOut(m) };
       }).sort(function (a, b) { return (b.level - a.level) || a.id.localeCompare(b.id); });
     },
     saveEvent: function (c, d) {
@@ -759,6 +863,7 @@ window.Mock = (function () {
     cancelEvent: function (c, d) {
       var e = findEvent(d.id, c);
       e.status = '取消';
+      audit(c, '取消活動', e.title, d.reason || '');
       var out = { event: evOut(e, c, true), push: null };
       if (d.notify) {
         if (!c.perms.push) out.push = { skipped: true, message: '活動已取消。你的角色沒有推播權限，所以沒有通知報名者' };
@@ -872,6 +977,7 @@ window.Mock = (function () {
         n++;
       });
       patches.forEach(function (p) { Object.assign(p[0], p[1]); });
+      audit(c, '年度交接', term + ' 年度', '存檔 ' + n + ' 位、更新 ' + patches.length + ' 位');
       return { term: term, archived: n, changed: patches.length, members: membersList() };
     },
     poll: function (c, d) { return pollOut(findPoll(d.id, c), c, true); },
@@ -948,7 +1054,7 @@ window.Mock = (function () {
         m.role = d.role;
       }
       if (d.status !== undefined) m.status = d.status === '停用' ? '停用' : '啟用';
-      if (d.title !== undefined) m.title = d.title;
+      if (d.title !== undefined && d.title !== m.title) { audit(c, '修改會員', m.name + '（' + m.id + '）', '職稱 ' + (m.title || '（空白）') + ' → ' + (d.title || '（空白）')); m.title = d.title; }
       if (d.company !== undefined) m.company = d.company;
       return memberOut(m);
     },
@@ -994,12 +1100,15 @@ window.Mock = (function () {
     pushPreview: 'push', push: 'push', pushLog: 'push', members: 'memberManage', updateMember: 'memberManage', unbindMember: 'memberManage',
     requests: 'memberManage', handleRequest: 'memberManage',
     prospects: 'viewRegs', officers: 'directory', handover: 'memberManage', schedulePush: 'push', scheduledPushes: 'push', cancelScheduledPush: 'push',
-    savePoll: 'newsManage', setPollStatus: 'newsManage', deletePoll: 'newsManage' };
+    savePoll: 'newsManage', setPollStatus: 'newsManage', deletePoll: 'newsManage',
+    auditLog: 'memberManage', dues: 'duesManage', setDues: 'duesManage', exportAttendance: 'viewRegs' };
 
+  var failQueue = [];
   function call(action, data) {
     return new Promise(function (resolve, reject) {
       setTimeout(function () {
         try {
+          if (failQueue.length) { var f = failQueue.shift(); throw err(f, f === 'BUSY' ? '目前使用的人比較多，請稍候幾秒再試一次' : '伺服器忙碌中'); }
           var fn = A[action];
           if (!fn) throw err('UNKNOWN_ACTION', '未知的動作：' + action);
           var c = ctx();
@@ -1022,6 +1131,8 @@ window.Mock = (function () {
     isFriend: function () { return friend[current]; },
     setFriend: function (v) { friend[current] = v; },
     reset: seed,
+    /** 測試用：讓接下來幾次呼叫回傳忙碌錯誤，驗證自動重試 */
+    failNext: function (code, n) { for (var i = 0; i < (n || 1); i++) failQueue.push(code || 'BUSY'); },
     bindHint: { name: '鄭凱文', phone: '0912000009' }
   };
 })();

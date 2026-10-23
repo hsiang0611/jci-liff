@@ -788,6 +788,66 @@ input[type=radio], input[type=checkbox] { width: 20px; height: 20px; accent-colo
 .shop-me-name span { font-size: 13px; color: var(--muted); }
 .drow-more .linkbtn { padding: 0; font-size: 14px; }
 
+/* ── 版本提示 ── */
+.updbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px var(--gutter); background: var(--harbor-deep); color: #fff; font-size: 14px; }
+.updbar .btn-onbrand { height: 32px; flex: none; }
+.updbar.is-warn { background: #FFF6D6; color: #6B4E00; border-bottom: 1px solid #F0DE9F; }
+
+/* ── 會員證（訪客）按鈕 ── */
+.mcard-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+.mcard-actions .btn-onbrand { margin-top: 0; }
+.btn-onbrand-ghost { background: transparent; color: #fff; border-color: rgba(255, 255, 255, .45); height: 42px; }
+
+/* ── 會費 ── */
+.dues-me .block-head { margin-bottom: 4px; }
+.dues-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 0; }
+.dues-row + .dues-row { border-top: 1px solid var(--line); }
+.dues-row > div { display: flex; flex-direction: column; }
+.dues-row b { font-size: 15.5px; font-weight: 600; }
+.dues-row span:not(.pill) { font-size: 13px; color: var(--muted); }
+.dues-desc { margin: 8px 0 6px; padding: 10px 12px; border-radius: var(--r-sm); background: var(--paper); border: 1px solid var(--line); font-size: 14px; line-height: 1.6; color: var(--ink-2); }
+.dues-sum { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 14px 0 8px; }
+.dues-sum div { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 10px 6px; text-align: center; display: flex; flex-direction: column; }
+.dues-sum b { font-family: var(--num); font-size: 22px; line-height: 1.1; }
+.dues-sum span { font-size: 12px; color: var(--muted); }
+.dues-sum .is-alert b { color: var(--buoy); }
+@media (max-width: 360px) { .dues-sum { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.mrow-main .dues-sub { font-family: inherit; font-size: 13px; letter-spacing: 0; }
+
+/* ── 行事曆訂閱 ── */
+.howto { margin-top: 14px; font-size: 14px; color: var(--ink-2); }
+.howto summary { cursor: pointer; color: var(--harbor); }
+.howto ol { margin: 8px 0 0; padding-left: 1.4em; line-height: 1.8; }
+.sheet .hint .linkbtn { font-size: 13px; padding: 0; }
+
+/* ── 認識我們 ── */
+.view-join { padding-top: 10px; }
+.join-hero { text-align: center; padding: 18px 8px 8px; }
+.join-logo { height: 84px; width: auto; }
+.join-hero h1 { font-size: 24px; margin: 10px 0 10px; letter-spacing: .06em; }
+.join-hero p { font-size: 15.5px; line-height: 1.8; color: var(--ink-2); text-align: left; }
+.join-points { list-style: none; margin: 16px 0 22px; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.join-points li { display: flex; align-items: center; gap: 10px; padding: 12px; border-radius: var(--r); background: var(--surface); border: 1px solid var(--line); font-size: 14.5px; font-weight: 600; }
+.join-points .ic { color: var(--harbor); }
+
+/* ── 出席報表 ── */
+.tag-meet { background: var(--tide); color: var(--harbor-deep); }
+.att-ev .capbar { margin-top: 6px; max-width: 220px; }
+.att-ev .erow-meta b { font-family: var(--num); font-size: 16px; color: var(--ink); }
+.names.award span { display: inline-flex; align-items: center; gap: 4px; font-weight: 600; }
+.names.award .ic { width: 18px; height: 18px; color: #B7791F; }
+.rank { list-style: none; margin: 0; padding: 2px 14px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); counter-reset: k; }
+.rank li { display: flex; align-items: baseline; gap: 10px; padding: 9px 0; counter-increment: k; }
+.rank li + li { border-top: 1px solid var(--line); }
+.rank li::before { content: counter(k); font-family: var(--num); font-size: 17px; color: var(--muted); width: 1.4em; }
+.rank li:nth-child(-n+3)::before { color: #B7791F; font-weight: 700; }
+.rank b { font-size: 15.5px; }
+.rank span { font-size: 12.5px; color: var(--muted); flex: 1; }
+.rank em { font-style: normal; font-family: var(--num); font-size: 17px; }
+
+/* ── 操作紀錄 ── */
+.log.audit li > div:first-child span { white-space: normal; word-break: break-word; }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }

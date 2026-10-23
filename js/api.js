@@ -74,7 +74,7 @@ window.Api = (function () {
     return liff.getIDToken();
   }
 
-  function call(action, data) {
+  function callOnce(action, data) {
     if (mode === 'demo') return window.Mock.call(action, data);
     var idToken = currentIdToken();
     if (!idToken) return relogin();
@@ -84,8 +84,11 @@ window.Api = (function () {
     }).catch(function () {
       throw apiError('NETWORK', '連不上伺服器，請檢查網路後再試一次');
     }).then(function (res) {
-      if (!res.ok) throw apiError('NETWORK', '伺服器回應異常（' + res.status + '）');
-      return res.json();
+      if (!res.ok) throw apiError(res.status === 429 || res.status >= 500 ? 'OVERLOAD' : 'NETWORK', '伺服器回應異常（' + res.status + '）');
+      // Apps Script 同時執行過多時會回傳 HTML 錯誤頁，不是 JSON
+      return res.text().then(function (t) {
+        try { return JSON.parse(t); } catch (e) { throw apiError('OVERLOAD', '伺服器忙碌中，請稍後再試'); }
+      });
     }).then(function (j) {
       if (j.ok) {
         try { sessionStorage.removeItem(RELOGIN_KEY); } catch (e) { /* ignore */ }
@@ -93,6 +96,51 @@ window.Api = (function () {
       }
       if (j.error && j.error.code === 'TOKEN_EXPIRED') return relogin();
       throw apiError(j.error ? j.error.code : 'UNKNOWN', j.error ? j.error.message : '未知錯誤');
+    });
+  }
+
+  /**
+   * 重送規則（例會報到尖峰、同時太多人用時）：
+   *   BUSY / OVERLOAD：伺服器還沒做事就拒絕了，任何動作都可以安全重送
+   *   NETWORK：不確定伺服器有沒有做完，只重送「重複做也不會出錯」的動作
+   */
+  var SAFE_TO_REPEAT = {
+    init: 1, event: 1, directory: 1, checkin: 1, register: 1, cancelRegistration: 1, setAttendance: 1, vote: 1, poll: 1,
+    officers: 1, prospects: 1, members: 1, requests: 1, pushLog: 1, scheduledPushes: 1, attendanceStats: 1, pushPreview: 1,
+    dues: 1, setDues: 1, auditLog: 1, updateMe: 1, phoneConsent: 1, updateShop: 1, setPollStatus: 1, checkinQr: 1
+  };
+  var RETRY_WAIT = [700, 1600, 3200];
+  var onRetry = null;
+
+  function call(action, data) {
+    var attempt = 0;
+    function run() {
+      return callOnce(action, data).catch(function (e) {
+        var transient = e && (e.code === 'BUSY' || e.code === 'OVERLOAD' || (e.code === 'NETWORK' && SAFE_TO_REPEAT[action]));
+        if (!transient || attempt >= RETRY_WAIT.length || (action === 'checkinQr' && data && data.renew)) throw e;
+        var wait = RETRY_WAIT[attempt++] + Math.floor(Math.random() * 500);
+        if (onRetry) onRetry(action, attempt);
+        return new Promise(function (r) { setTimeout(r, wait); }).then(run);
+      });
+    }
+    return run();
+  }
+
+  /** 這支手機目前登入的人（暫存首頁資料用，避免換帳號看到別人的） */
+  function userKey() {
+    if (mode === 'demo') return 'demo-' + (window.Mock ? window.Mock.getRole() : '');
+    try {
+      var d = liff.getDecodedIDToken && liff.getDecodedIDToken();
+      return d && d.sub ? d.sub : '';
+    } catch (e) {
+      return '';
+    }
+  }
+
+  function loadScriptOnce(src, test) {
+    if (test()) return Promise.resolve();
+    return loadScript(src).catch(function () {
+      throw apiError('LOAD', '元件載入失敗，請檢查網路後再試一次');
     });
   }
 
@@ -147,7 +195,8 @@ window.Api = (function () {
   }
 
   return {
-    init: init, call: call, friendship: friendship, profileFallback: profileFallback,
+    init: init, call: call, friendship: friendship, profileFallback: profileFallback, userKey: userKey,
+    loadScriptOnce: loadScriptOnce, set onRetry(fn) { onRetry = fn; },
     canShare: canShare, share: share, liffUrl: liffUrl, openExternal: openExternal,
     addFriendUrl: addFriendUrl, isInClient: isInClient, closeApp: closeApp, logout: logout,
     get mode() { return mode; }
