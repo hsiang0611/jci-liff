@@ -452,6 +452,7 @@ input[type=radio], input[type=checkbox] { width: 20px; height: 20px; accent-colo
 .choice small { font-size: 13px; color: var(--muted); }
 .choices .choice-more { padding: 0 14px 14px 46px; }
 .choices .chips { margin: 0; padding: 0; flex-wrap: wrap; }
+.choices .chips-all { margin-top: 8px; font-weight: 600; }
 .chip-check { position: relative; }
 .chip-check input { position: absolute; opacity: 0; width: 1px; height: 1px; }
 .chip-check span { display: inline-block; padding: 5px 14px; border-radius: 999px; border: 1px solid var(--line); font-size: 14px; background: var(--surface); }
