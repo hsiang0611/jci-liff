@@ -568,6 +568,22 @@ input[type=radio], input[type=checkbox] { width: 20px; height: 20px; accent-colo
 .reglist > .btn-small { margin-top: 10px; }
 .names { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 15px; margin: 0 0 6px; }
 .names .is-unbound { color: var(--muted); }
+/* 代為報名 */
+.reg-tools { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.head-links { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px 14px; }
+.regs-by { display: block; font-size: 12.5px; color: var(--harbor); padding-left: 2.1em; }
+.names.is-proxy { gap: 8px; }
+.names.is-proxy button {
+  font: inherit; font-size: 15px; color: var(--ink); background: var(--surface); border: 1px solid var(--line);
+  border-radius: 999px; padding: 5px 12px; cursor: pointer;
+}
+.names.is-proxy button:hover, .names.is-proxy button:focus-visible { border-color: var(--harbor); color: var(--harbor); }
+.names.is-proxy button.is-unbound { color: var(--muted); border-style: dashed; }
+.proxy-who { display: flex; align-items: center; gap: 12px; padding: 4px 0 14px; }
+.proxy-who > div { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.proxy-who b { font-size: 18px; }
+.proxy-who > div span { font-size: 13px; color: var(--muted); }
+.menu-item .pill { flex: none; }
 
 /* ── 報到 QR ── */
 .qr-head { margin: 0 40px 14px 0; }

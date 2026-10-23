@@ -8,13 +8,13 @@ window.Mock = (function () {
   'use strict';
 
   var DAY = 86400000;
-  var P = function (d, e, n, r, p, m, f) {
-    return { directory: d, eventManage: e, newsManage: n, viewRegs: r, push: p, memberManage: m, duesManage: f };
+  var P = function (d, e, n, r, p, m, f, x) {
+    return { directory: d, eventManage: e, newsManage: n, viewRegs: r, push: p, memberManage: m, duesManage: f, regProxy: x || 0 };
   };
   var ROLES = [
-    { role: '會長', level: 90, desc: '可管理一切並發送推播', perms: P(1, 1, 1, 1, 1, 1, 1) },
-    { role: '秘書長', level: 90, desc: '會務總管：可管理會員、活動、消息、會費並發送推播', perms: P(1, 1, 1, 1, 1, 1, 1) },
-    { role: '管理員', level: 90, desc: '秘書處、系統管理者（不算幹部）', perms: P(1, 1, 1, 1, 1, 1, 1) },
+    { role: '會長', level: 90, desc: '可管理會員、活動、消息、會費並發送推播', perms: P(1, 1, 1, 1, 1, 1, 1) },
+    { role: '秘書長', level: 90, desc: '會務總管：可管理會員、活動、消息、會費、代為報名並發送推播', perms: P(1, 1, 1, 1, 1, 1, 1, 1) },
+    { role: '管理員', level: 90, desc: '秘書處、系統管理者（不算幹部）', perms: P(1, 1, 1, 1, 1, 1, 1, 1) },
     { role: '財務長', level: 80, desc: '登錄會費；可發布活動與消息、看報名名單', perms: P(1, 1, 1, 1, 0, 0, 1) },
     { role: '副會長', level: 80, desc: '可發布活動與消息、看報名名單', perms: P(1, 1, 1, 1, 0, 0, 0) },
     { role: '理事', level: 75, desc: '可發布活動與消息、看報名名單', perms: P(1, 1, 1, 1, 0, 0, 0) },
@@ -44,6 +44,7 @@ window.Mock = (function () {
 
   var IDENTITY = {
     '會長': { uid: 'U-demo-01', name: 'Chien-Hung' },
+    '秘書長': { uid: 'U-demo-02', name: '怡君' },
     '財務長': { uid: 'U-demo-12', name: '書豪' },
     '理事': { uid: 'U-demo-04', name: '宜蓁 Ivy' },
     '會員': { uid: 'U-demo-05', name: '志豪' },
@@ -197,7 +198,7 @@ window.Mock = (function () {
     // 理監事會：兩位請假
     addReg('E3', db.members[0], 1, '');
     addReg('E3', db.members[1], 1, '');
-    db.regs.push({ id: 'R-leave1', eventId: 'E3', memberId: 'M003', name: '李承翰', phone: '0912000003', lineUid: 'U-demo-03', count: 1, note: '出差台北', status: '請假', attended: '', checkinBy: '', createdAt: at(-1, 9) });
+    db.regs.push({ id: 'R-leave1', eventId: 'E3', memberId: 'M003', name: '李承翰', phone: '0912000003', lineUid: 'U-demo-03', count: 1, note: '出差台北', status: '請假', attended: '', checkinBy: '', registeredBy: '陳怡君', createdAt: at(-1, 9) });
     // 林志豪上個月例會請假
     db.regs.push({ id: 'R-leave2', eventId: 'E6', memberId: 'M005', name: '林志豪', phone: '0912000005', lineUid: 'U-demo-05', count: 1, note: '家裡有事', status: '請假', attended: '', checkinBy: '', createdAt: at(-17, 9) });
     for (var g = 0; g < 9; g++) {
@@ -467,10 +468,12 @@ window.Mock = (function () {
     if (e.capacity > 0 && !mine && others >= e.capacity) return '名額已滿';
     return '';
   }
+  /** 我的報名：同一個 LINE，或同一個會員編號（與後端 isMyReg_ 相同） */
+  function isMine(r, c) { return (r.lineUid && r.lineUid === c.uid) || !!(c.member && r.memberId && r.memberId === c.member.id); }
   function evOut(e, c, withRegs) {
     var regs = activeRegs(e.id), attend = [], leave = [], mine = null, total = 0, others = 0, attended = 0;
     regs.forEach(function (r) {
-      if (r.lineUid === c.uid) mine = r;
+      if (isMine(r, c)) mine = r;
       if (!attending(r)) { leave.push(r); return; }
       attend.push(r);
       total += r.count;
@@ -486,7 +489,7 @@ window.Mock = (function () {
     o.regPeople = attend.length;
     o.leaveCount = leave.length;
     o.attendedCount = attended;
-    o.myReg = mine ? { id: mine.id, status: mine.status, count: mine.count, note: mine.note, attended: mine.attended || '', checkinBy: mine.checkinBy || '' } : null;
+    o.myReg = mine ? { id: mine.id, status: mine.status, count: mine.count, note: mine.note, attended: mine.attended || '', checkinBy: mine.checkinBy || '', registeredBy: mine.registeredBy || '' } : null;
     o.regOpen = !reason;
     o.regClosedReason = reason;
     o.leaveOpen = !leaveClosedReason(e, c);
@@ -496,9 +499,9 @@ window.Mock = (function () {
     o.icsUrl = e.status === '發布' ? 'data:text/calendar;charset=utf-8,' + encodeURIComponent(icsText(e)) : '';
     if (withRegs && c.perms.viewRegs) {
       o.registrations = attend.map(function (r) {
-        return { regId: r.id, name: r.name, phone: r.phone, count: r.count, note: r.note, memberId: r.memberId, guest: !r.memberId, attended: r.attended || '', checkinBy: r.checkinBy || '', createdAt: r.createdAt };
+        return { regId: r.id, name: r.name, phone: r.phone, count: r.count, note: r.note, memberId: r.memberId, guest: !r.memberId, attended: r.attended || '', checkinBy: r.checkinBy || '', createdAt: r.createdAt, proxyBy: r.registeredBy || '' };
       });
-      o.leaves = leave.map(function (r) { return { regId: r.id, name: r.name, memberId: r.memberId, note: r.note, createdAt: r.createdAt }; });
+      o.leaves = leave.map(function (r) { return { regId: r.id, name: r.name, memberId: r.memberId, note: r.note, createdAt: r.createdAt, proxyBy: r.registeredBy || '' }; });
       o.unreplied = null;
       if (o.audienceLevel > 0) {
         var replied = {};
@@ -694,12 +697,12 @@ window.Mock = (function () {
     register: function (c, d) {
       var e = findEvent(d.eventId, c);
       var regs = activeRegs(e.id), mine = null, others = 0;
-      regs.forEach(function (r) { if (r.lineUid === c.uid) mine = r; else if (attending(r)) others += r.count; });
+      regs.forEach(function (r) { if (isMine(r, c)) mine = r; else if (attending(r)) others += r.count; });
       var now = new Date().toISOString(), note = String(d.note || '').slice(0, 200);
       if (d.reply === '請假') {
         var why = leaveClosedReason(e, c);
         if (why) throw err('REG_CLOSED', why);
-        if (mine) Object.assign(mine, { status: '請假', note: note, attended: '', checkinBy: '' });
+        if (mine) Object.assign(mine, { status: '請假', note: note, attended: '', checkinBy: '', lineUid: c.uid, registeredBy: '' });
         else db.regs.push({ id: 'R' + uid4(), eventId: e.id, memberId: c.member.id, name: c.member.name, phone: c.member.phone, lineUid: c.uid, count: 1, note: note, status: '請假', attended: '', checkinBy: '', createdAt: now });
         return evOut(e, c, true);
       }
@@ -715,14 +718,14 @@ window.Mock = (function () {
         if (!normName(name)) throw err('INVALID', '請填寫姓名');
         if (!/^09\d{8}$/.test(phone)) throw err('INVALID', '請填寫正確的手機號碼（09 開頭共 10 碼）');
       }
-      if (mine) Object.assign(mine, { status: '報名', count: count, note: note });
+      if (mine) Object.assign(mine, { status: '報名', count: count, note: note, lineUid: c.uid, registeredBy: '' });
       else db.regs.push({ id: 'R' + uid4(), eventId: e.id, memberId: memberId, name: name, phone: phone, lineUid: c.uid, count: count, note: note, status: '報名', attended: '', checkinBy: '', createdAt: now });
       return evOut(e, c, true);
     },
     cancelRegistration: function (c, d) {
       var e = findEvent(d.eventId, c);
       if (Date.parse(e.start) <= Date.now()) throw err('REG_CLOSED', '活動已開始，無法取消');
-      var mine = activeRegs(e.id).filter(function (r) { return r.lineUid === c.uid; })[0];
+      var mine = activeRegs(e.id).filter(function (r) { return isMine(r, c); })[0];
       if (!mine) throw err('NOT_FOUND', '你沒有回覆這個活動');
       mine.status = '取消';
       return evOut(e, c, true);
@@ -732,7 +735,7 @@ window.Mock = (function () {
       var code = String(d.code || '').toUpperCase();
       if (!code || code !== String(e.checkinCode || '').toUpperCase()) throw err('INVALID', '報到碼不正確，請掃描現場的 QR code');
       if (!checkinWindow(e).open) throw err('CHECKIN_CLOSED', '目前不在報到時間（活動開始前 2 小時到結束後 3 小時）');
-      var mine = activeRegs(e.id).filter(function (r) { return r.lineUid === c.uid; })[0];
+      var mine = activeRegs(e.id).filter(function (r) { return isMine(r, c); })[0];
       var now = new Date().toISOString(), already = false;
       if (mine) {
         if (mine.attended) already = true;
@@ -752,6 +755,67 @@ window.Mock = (function () {
       }
       var win = checkinWindow(e);
       return { code: e.checkinCode, url: location.origin + location.pathname + '#/checkin/' + e.id + '/' + e.checkinCode, open: win.open, from: win.from, to: win.to };
+    },
+    proxyRegister: function (c, d) {
+      var reply = d.reply || '出席';
+      if (['出席', '請假', '取消'].indexOf(reply) < 0) throw err('INVALID', '回覆只能是出席、請假或取消');
+      var e = findEvent(d.eventId, c);
+      if (e.status === '取消') throw err('REG_CLOSED', '活動已取消');
+      if (e.status !== '發布') throw err('REG_CLOSED', '活動尚未發布');
+      var lvl = audLevel(e.audience), regs = activeRegs(e.id), now = new Date().toISOString();
+      var started = Date.parse(e.start) <= Date.now(), ended = Date.parse(e.end || e.start) + (e.end ? 0 : 3 * 3600000) < Date.now();
+      var m = null, row = null, guest = null;
+      if (d.regId) {
+        row = regs.filter(function (r) { return r.id === d.regId; })[0];
+        if (!row) throw err('NOT_FOUND', '找不到這筆報名');
+        if (row.memberId) m = membersById(row.memberId);
+        if (!m) guest = { name: row.name, phone: row.phone };
+      } else if (d.memberId) {
+        m = membersById(d.memberId);
+        if (!m) throw err('NOT_FOUND', '找不到這位會員');
+      } else if (d.guest) {
+        guest = { name: String(d.guest.name || '').trim().slice(0, 30), phone: normPhone(d.guest.phone) };
+        if (!normName(guest.name)) throw err('INVALID', '請填寫姓名');
+        if (!/^09\d{8}$/.test(guest.phone)) throw err('INVALID', '請填寫正確的手機號碼（09 開頭共 10 碼）');
+        if (lvl > 0) throw err('INVALID', '非會員只能報名公開活動');
+      } else throw err('INVALID', '請選擇要幫誰報名');
+      if (m) {
+        if (m.status === '停用') throw err('INVALID', m.name + ' 已停用');
+        var ml = BY[m.role] ? BY[m.role].level : 0;
+        if (lvl > ml) throw err('FORBIDDEN', m.name + '（' + m.role + '）看不到這場活動，可見對象是' + levelLabel(lvl));
+        if (!row) row = regs.filter(function (r) { return r.memberId === m.id || (m.lineUid && r.lineUid === m.lineUid); })[0] || null;
+      } else if (!row) row = regs.filter(function (r) { return !r.memberId && normPhone(r.phone) === guest.phone; })[0] || null;
+      var who = m ? m.name : guest.name, by = c.member ? c.member.name : c.lineName, note = String(d.note || '').slice(0, 200), detail;
+      if (reply === '取消') {
+        if (!row) throw err('NOT_FOUND', who + ' 還沒有回覆這場活動');
+        if (started) throw err('REG_CLOSED', '活動已開始，無法取消');
+        if (row.attended) throw err('REG_CLOSED', who + ' 已經報到，不能取消');
+        detail = '取消' + (attending(row) ? '報名' : '請假');
+        Object.assign(row, { status: '取消', registeredBy: by });
+      } else if (reply === '請假') {
+        if (!m) throw err('INVALID', '非會員不用請假，要取消請選「取消報名」');
+        if (ended) throw err('REG_CLOSED', '活動已結束');
+        if (row) Object.assign(row, { status: '請假', count: 1, note: note, attended: '', checkinBy: '', registeredBy: by });
+        else db.regs.push({ id: 'R' + uid4(), eventId: e.id, memberId: m.id, name: m.name, phone: m.phone, lineUid: m.lineUid, count: 1, note: note, status: '請假', attended: '', checkinBy: '', registeredBy: by, createdAt: now });
+        detail = '請假' + (note ? '（' + note + '）' : '');
+      } else {
+        if (started) throw err('REG_CLOSED', '活動已開始，請改用報名名單的「現場加入」');
+        var count = Math.floor(Number(d.count) || 1);
+        if (count < 1 || count > 10) throw err('INVALID', '報名人數請填 1 到 10 人');
+        var others = 0;
+        regs.forEach(function (r) { if (r !== row && attending(r)) others += r.count; });
+        if (e.capacity > 0 && others + count > e.capacity) throw err('FULL', '名額不足，目前只剩 ' + Math.max(0, e.capacity - others) + ' 位');
+        if (row) Object.assign(row, { status: '報名', count: count, note: note, registeredBy: by }, attending(row) ? {} : { attended: '', checkinBy: '' });
+        else db.regs.push({ id: 'R' + uid4(), eventId: e.id, memberId: m ? m.id : '', name: who, phone: m ? m.phone : guest.phone, lineUid: m ? m.lineUid : '', count: count, note: note, status: '報名', attended: '', checkinBy: '', registeredBy: by, createdAt: now });
+        detail = '出席 ' + count + ' 人' + (note ? '（' + note + '）' : '');
+      }
+      audit(c, '代為報名', who, e.title + '：' + detail);
+      var notified = false;
+      if (d.notify && c.perms.push && m && m.lineUid) {
+        notified = true;
+        db.pushlog.push({ time: now, sender: by, audience: who, title: reply === '取消' ? '已幫你取消回覆' : reply === '請假' ? '已幫你請假' : '已幫你報名', content: e.title, recipients: 1, result: 'OK' });
+      }
+      return { event: evOut(e, c, true), notified: notified };
     },
     setAttendance: function (c, d) {
       var e = findEvent(d.eventId, c), regs = activeRegs(e.id), row = null, now = new Date().toISOString();
@@ -1121,7 +1185,7 @@ window.Mock = (function () {
   };
   var PERM = { directory: 'directory', saveEvent: 'eventManage', cancelEvent: 'eventManage', saveNews: 'newsManage', deleteNews: 'newsManage',
     saveDoc: 'newsManage', deleteDoc: 'newsManage', checkinQr: 'viewRegs', setAttendance: 'viewRegs', attendanceStats: 'viewRegs',
-    pushPreview: 'push', push: 'push', pushLog: 'push', members: 'memberManage', updateMember: 'memberManage', unbindMember: 'memberManage',
+    pushPreview: 'push', push: 'push', pushLog: 'push', proxyRegister: 'regProxy', members: 'memberManage', updateMember: 'memberManage', unbindMember: 'memberManage',
     requests: 'memberManage', handleRequest: 'memberManage',
     prospects: 'viewRegs', officers: 'directory', handover: 'memberManage', schedulePush: 'push', scheduledPushes: 'push', cancelScheduledPush: 'push',
     savePoll: 'newsManage', setPollStatus: 'newsManage', deletePoll: 'newsManage',

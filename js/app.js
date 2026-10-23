@@ -12,7 +12,7 @@
   var CFG = window.APP_CONFIG || {};
 
   /** 版本：每次更新前端時改這裡，並同步改後端 Schema.gs 的 APP_VERSION 與 index.html 的 ?v= */
-  var APP_VERSION = '2026.10.23.2';
+  var APP_VERSION = '2026.10.23.3';
   window.APP_VERSION = APP_VERSION;
 
   /**
@@ -239,6 +239,7 @@
     check: 'M4.5 12.5l5 5L20 7',
     close: 'M6 6l12 12M18 6 6 18',
     edit: '<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="m13.5 6.5 4 4"/>',
+    userplus: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M19 8v6M16 11h6"/>',
     search: '<circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/>',
     copy: '<rect x="8.5" y="8.5" width="11.5" height="11.5" rx="2"/><path d="M15.5 8.5V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v9.5a1 1 0 0 0 1 1h3.5"/>',
     pinned: 'M9 3.5h6l-1 5.5 3 3H7l3-3zM12 12v8.5',
@@ -644,6 +645,7 @@
       var leaving = mr.status === '請假';
       var head = leaving ? '你已回覆請假' : mr.attended ? '已報到 ' + fmtDT(mr.attended).replace(/^.*?）/, '') : '你已報名 ' + mr.count + ' 人';
       var sub = mr.note ? (leaving ? '原因：' : '備註：') + esc(mr.note) : '';
+      if (mr.registeredBy) sub += (sub ? '<br>' : '') + '由 ' + esc(mr.registeredBy) + ' 代為' + (leaving ? '請假' : '報名');
       var canChange = !isPast(ev) && ev.status === '發布' && !mr.attended && Date.parse(ev.start) > Date.now();
       html += '<div class="myreg' + (leaving ? ' is-leave' : '') + '">' + icon(leaving ? 'leave' : 'check') + '<div><b>' + head + '</b>' +
         (sub ? '<span>' + sub + '</span>' : '') + '</div>' +
@@ -688,8 +690,14 @@
     if (detail.__error) return head + '</div>' + errorBlock(detail.__error) + '</section>';
     var regs = detail.registrations || [], leaves = detail.leaves || [], unreplied = detail.unreplied;
     var marking = ev.status === '發布' && Date.parse(ev.start) - Date.now() < 86400000; // 活動前一天起可以點名
-    head += regs.length ? '<button type="button" class="linkbtn" data-act="copyRegs" data-id="' + esc(ev.id) + '">' + icon('copy') + '複製名單</button>' : '';
-    head += '</div>';
+    var proxy = canProxy(ev), notStarted = Date.parse(ev.start) > Date.now();
+    function editBtn(r, show) {
+      return show ? '<button type="button" class="iconbtn" data-act="proxyEdit" data-event="' + esc(ev.id) + '" data-reg="' + esc(r.regId) + '" aria-label="幫' + esc(r.name) + '修改回覆">' + icon('edit') + '</button>' : '';
+    }
+    function byTag(r) { return r.proxyBy ? '<span class="regs-by">' + esc(r.proxyBy) + ' 代報</span>' : ''; }
+    var links = (regs.length ? '<button type="button" class="linkbtn" data-act="copyRegs" data-id="' + esc(ev.id) + '">' + icon('copy') + '複製名單</button>' : '') +
+      (proxy && notStarted ? '<button type="button" class="linkbtn" data-act="proxyReg" data-id="' + esc(ev.id) + '">' + icon('userplus') + '代為報名</button>' : '');
+    head += (links ? '<div class="head-links">' + links + '</div>' : '') + '</div>';
     var html = head;
     if (!regs.length) html += '<p class="muted">還沒有人報名。</p>';
     else {
@@ -701,20 +709,25 @@
           return '<li' + (r.attended ? ' class="is-attended"' : '') + '>' + box + '<div><b>' + esc(r.name) + '</b>' + (r.guest ? '<span class="tag">非會員</span>' : '') +
             (r.count > 1 ? '<span class="regs-n">' + r.count + ' 人</span>' : '') +
             (r.attended ? '<span class="regs-n is-ok">' + esc(r.checkinBy || '已報到') + '</span>' : '') +
-            (r.note ? '<span class="regs-note">' + esc(r.note) + '</span>' : '') + '</div>' +
-            (r.phone ? '<a class="iconbtn" href="tel:' + esc(r.phone) + '" aria-label="打電話給' + esc(r.name) + '">' + icon('phone') + '</a>' : '') + '</li>';
+            (r.note ? '<span class="regs-note">' + esc(r.note) + '</span>' : '') + byTag(r) + '</div>' +
+            (r.phone ? '<a class="iconbtn" href="tel:' + esc(r.phone) + '" aria-label="打電話給' + esc(r.name) + '">' + icon('phone') + '</a>' : '') +
+            editBtn(r, proxy && notStarted && !r.attended) + '</li>';
         }).join('') + '</ol>';
     }
-    if (marking) html += '<button type="button" class="btn btn-ghost btn-small" data-act="walkin" data-id="' + esc(ev.id) + '">' + icon('plus') + '現場加入沒報名的會員</button>';
+    var tools = marking ? '<button type="button" class="btn btn-ghost btn-small" data-act="walkin" data-id="' + esc(ev.id) + '">' + icon('plus') + '現場加入沒報名的會員</button>' : '';
+    if (tools) html += '<div class="reg-tools">' + tools + '</div>';
     if (leaves.length) {
       html += '<h3 class="sub-head">請假 ' + leaves.length + ' 人</h3><ol class="regs is-leave">' + leaves.map(function (r) {
-        return '<li><div><b>' + esc(r.name) + '</b>' + (r.note ? '<span class="regs-note">' + esc(r.note) + '</span>' : '') + '</div></li>';
+        return '<li><div><b>' + esc(r.name) + '</b>' + (r.note ? '<span class="regs-note">' + esc(r.note) + '</span>' : '') + byTag(r) + '</div>' + editBtn(r, proxy) + '</li>';
       }).join('') + '</ol>';
     }
     if (unreplied && unreplied.length) {
-      html += '<h3 class="sub-head">未回覆 ' + unreplied.length + ' 人</h3><p class="names">' + unreplied.map(function (u) {
-        return '<span' + (u.bound ? '' : ' class="is-unbound" title="尚未綁定 LINE"') + '>' + esc(u.name) + '</span>';
-      }).join('') + '</p>' + (unreplied.some(function (u) { return !u.bound; }) ? '<p class="hint">灰色的人還沒綁定 LINE，收不到推播，請另外聯絡。</p>' : '');
+      html += '<h3 class="sub-head">未回覆 ' + unreplied.length + ' 人</h3><p class="names' + (proxy ? ' is-proxy' : '') + '">' + unreplied.map(function (u) {
+        var cls = u.bound ? '' : ' class="is-unbound" title="尚未綁定 LINE"';
+        return proxy ? '<button type="button" data-act="proxyPick" data-event="' + esc(ev.id) + '" data-id="' + esc(u.id) + '"' + cls + '>' + esc(u.name) + '</button>'
+          : '<span' + cls + '>' + esc(u.name) + '</span>';
+      }).join('') + '</p>' + (proxy ? '<p class="hint">點名字可以幫他報名或請假。</p>' : '') +
+        (unreplied.some(function (u) { return !u.bound; }) ? '<p class="hint">灰色的人還沒綁定 LINE，收不到推播，請另外聯絡。</p>' : '');
     }
     return html + '</section>';
   }
@@ -2172,6 +2185,97 @@
       '<button type="button" class="btn btn-ghost" data-act="checkinQr" data-id="' + esc(ev ? ev.id : '') + '" data-renew="1">' + icon('refresh') + '換一組報到碼</button></div>' +
       '<p class="hint">換報到碼後，舊的 QR code 就失效，適合用在有人把連結外流的時候。</p>';
   }
+  /* ── 代為報名（秘書長幫會員或非會員報名、請假、取消） ── */
+  function canProxy(ev) {
+    return perm('regProxy') && ev.status === '發布' && !isPast(ev);
+  }
+  /** 這位會員在這場活動目前的回覆：{ regId, status, count, note, proxyBy, name, guest } 或 null */
+  function proxyCurrent(d, memberId, regId) {
+    var hit = null;
+    ((d && d.registrations) || []).forEach(function (r) {
+      if ((regId && r.regId === regId) || (!regId && memberId && r.memberId === memberId)) hit = Object.assign({ status: '報名' }, r);
+    });
+    ((d && d.leaves) || []).forEach(function (r) {
+      if ((regId && r.regId === regId) || (!regId && memberId && r.memberId === memberId)) hit = Object.assign({ status: '請假', count: 1, guest: false }, r);
+    });
+    return hit;
+  }
+  /** 看得到這場活動的會員（從通訊錄名單過濾），存在 S.proxyCands */
+  function proxyCandidates(d) {
+    var listP = S.cache.directory && !S.cache.directory.__error ? Promise.resolve(S.cache.directory)
+      : Api.call('directory').then(function (l) { S.cache.directory = l; return l; });
+    return listP.then(function (list) {
+      var min = d && d.audienceLevel ? d.audienceLevel : 1;
+      S.proxyCands = list.filter(function (m) { return m.level > 0 && m.level >= min; }).slice().sort(byLevelThenName);
+      return S.proxyCands;
+    });
+  }
+  function proxyStateText(cur) {
+    if (!cur) return '';
+    return cur.status === '請假' ? '已請假' : '已報名 ' + cur.count + ' 人';
+  }
+  function proxyRows(cands, q) {
+    q = (q || '').trim().toLowerCase();
+    var d = S.cache['event:' + S.proxyEvent];
+    var list = cands.filter(function (m) { return !q || (m.name + m.role + (m.title || '') + (m.company || '')).toLowerCase().indexOf(q) >= 0; }).slice(0, 60);
+    if (!list.length) return '<p class="muted" style="padding:14px">沒有符合的會員</p>';
+    return list.map(function (m) {
+      var cur = proxyCurrent(d, m.id);
+      return '<button type="button" class="menu-item" data-act="proxyPick" data-event="' + esc(S.proxyEvent) + '" data-id="' + esc(m.id) + '"><span class="avatar avatar-txt">' + esc(m.name.charAt(0)) + '</span>' +
+        '<div><b>' + esc(m.name) + '</b><span>' + esc(m.role + (extraTitle(m.title, m.role) ? '　' + m.title : '')) + '</span></div>' +
+        (cur ? '<span class="pill ' + (cur.status === '請假' ? 'is-muted' : 'is-ok') + '">' + esc(proxyStateText(cur)) + '</span>' : icon('plus', 'chev')) + '</button>';
+    }).join('');
+  }
+  function openProxyForm(evId, t) {
+    var d = S.cache['event:' + evId];
+    var ev = d && !d.__error ? d : findEvent(evId);
+    if (!ev) return;
+    var cur = t.guestNew ? null : proxyCurrent(d, t.memberId, t.regId);
+    var guest = !!t.guestNew || !!(cur && cur.guest);
+    var mem = !guest && (S.proxyCands || []).filter(function (m) { return m.id === (t.memberId || (cur && cur.memberId)); })[0];
+    var unrep = ((d && d.unreplied) || []).filter(function (u) { return u.id === t.memberId; })[0];
+    var name = (cur && cur.name) || (mem && mem.name) || (unrep && unrep.name) || '';
+    var roleText = mem ? mem.role + (extraTitle(mem.title, mem.role) ? '　' + mem.title : '') : unrep ? unrep.role : guest ? '非會員' : '';
+    var started = Date.parse(ev.start) <= Date.now();
+    var canAttend = !started, canLeave = !guest;
+    var mode = cur && cur.status === '請假' ? 'leave' : canAttend ? 'attend' : 'leave';
+    if (!canLeave) mode = 'attend';
+    var count = cur && cur.status !== '請假' ? cur.count : 1;
+    var who = t.guestNew
+      ? field('姓名', '<input id="x-name" name="gname" required maxlength="30" autocomplete="off">', '', 'x-name') +
+        field('手機', '<input id="x-phone" name="gphone" type="tel" inputmode="tel" required placeholder="0912345678" autocomplete="off">', '主辦單位聯絡用，不會公開', 'x-phone')
+      : '<div class="proxy-who"><span class="avatar avatar-txt">' + esc(name.charAt(0)) + '</span><div><b>' + esc(name) + '</b><span>' + esc(roleText) + '</span></div>' +
+        (cur ? '<span class="pill ' + (cur.status === '請假' ? 'is-muted' : 'is-ok') + '">' + esc(proxyStateText(cur)) + '</span>' : '<span class="pill">未回覆</span>') + '</div>';
+    var seg = canAttend && canLeave ? '<div class="seg seg-reply" role="radiogroup" aria-label="回覆">' +
+      '<label><input type="radio" name="reply" value="出席"' + (mode === 'attend' ? ' checked' : '') + '><span>' + icon('check') + '出席</span></label>' +
+      '<label><input type="radio" name="reply" value="請假"' + (mode === 'leave' ? ' checked' : '') + '><span>' + icon('leave') + '請假</span></label></div>'
+      : '<input type="hidden" name="reply" value="' + (mode === 'leave' ? '請假' : '出席') + '">';
+    var left = ev.capacity > 0 ? ev.capacity - ev.regCount + (cur && cur.status !== '請假' ? cur.count : 0) : null;
+    var notes = [];
+    if (canAttend && ev.deadline && Date.parse(ev.deadline) < Date.now()) notes.push('已過報名截止時間，仍可代為報名。');
+    if (canAttend && left !== null) notes.push('名額還剩 ' + Math.max(0, left) + ' 位。');
+    if (started) notes.push('活動已開始，只能幫忙請假；到場的人請用「現場加入」。');
+    var attendFields = '<div data-reply="出席"' + (mode !== 'attend' ? ' hidden' : '') + '>' +
+      '<div class="field"><label for="x-count">人數（含本人）</label><div class="stepper">' +
+      '<button type="button" class="iconbtn" data-act="step" data-d="-1" aria-label="減少">' + icon('minus') + '</button>' +
+      '<input id="x-count" name="count" type="number" min="1" max="10" inputmode="numeric" value="' + count + '">' +
+      '<button type="button" class="iconbtn" data-act="step" data-d="1" aria-label="增加">' + icon('plus') + '</button></div></div>' +
+      field('備註', '<textarea id="x-note" name="note" rows="2" maxlength="200" placeholder="例如：吃素、攜伴姓名、電話報名">' + esc(cur && cur.status !== '請假' ? cur.note || '' : '') + '</textarea>', '', 'x-note') + '</div>';
+    var leaveFields = canLeave ? '<div data-reply="請假"' + (mode !== 'leave' ? ' hidden' : '') + '>' +
+      field('請假原因（選填）', '<textarea id="x-reason" name="reason" rows="2" maxlength="200" placeholder="例如：出差、家裡有事">' + esc(cur && cur.status === '請假' ? cur.note || '' : '') + '</textarea>', '', 'x-reason') + '</div>' : '';
+    var notify = canPush() && !guest ? '<label class="check"><input type="checkbox" name="notify"><span>用 LINE 通知本人<small>對方有綁定 LINE 才收得到，用掉 1 則訊息額度</small></span></label>' : '';
+    var submitText = mode === 'leave' ? '送出請假' : cur ? '更新報名' : '代為報名';
+    openSheet('<h2 class="sheet-title">' + (cur ? '修改回覆' : '代為報名') + '<small>' + esc(ev.title) + '</small></h2>' +
+      '<form class="form" data-form="proxy" novalidate><input type="hidden" name="eventId" value="' + esc(ev.id) + '">' +
+      '<input type="hidden" name="memberId" value="' + esc(guest ? '' : (t.memberId || (cur && cur.memberId) || '')) + '">' +
+      '<input type="hidden" name="regId" value="' + esc(cur ? cur.regId : '') + '">' +
+      '<input type="hidden" name="who" value="' + esc(name) + '">' + who + seg +
+      (notes.length ? '<p class="hint">' + notes.map(esc).join('<br>') + '</p>' : '') + attendFields + leaveFields + notify +
+      '<div class="form-actions"><button type="submit" class="btn btn-primary btn-block" data-proxy-submit>' + submitText + '</button>' +
+      (cur && !(cur.status !== '請假' && started) ? '<button type="button" class="btn btn-ghost is-danger btn-block" data-act="proxyCancel" data-event="' + esc(ev.id) + '" data-reg="' + esc(cur.regId) + '" data-name="' + esc(name) + '" data-leave="' + (cur.status === '請假' ? '1' : '') + '">' + (cur.status === '請假' ? '取消他的請假' : '取消他的報名') + '</button>' : '') +
+      '</div></form>', '代為報名');
+  }
+
   function walkinRows(cands, q) {
     q = (q || '').trim().toLowerCase();
     var list = cands.filter(function (m) { return !q || (m.name + m.role + m.company).toLowerCase().indexOf(q) >= 0; }).slice(0, 40);
@@ -2423,6 +2527,48 @@
         upsertEvent(ev);
         render();
       }).catch(function (e) { el.checked = !on; el.disabled = false; fail(e); });
+    },
+    proxyReg: function (el) {
+      var id = el.getAttribute('data-id');
+      var d = S.cache['event:' + id];
+      if (!d || d.__error) return;
+      busy(el, proxyCandidates(d)).then(function (cands) {
+        S.proxyEvent = id;
+        openSheet('<h2 class="sheet-title">代為報名<small>' + esc(d.title) + '</small></h2>' +
+          (d.audienceLevel === 0 ? '<button type="button" class="btn btn-ghost btn-block" data-act="proxyGuest" data-event="' + esc(id) + '">' + icon('userplus') + '幫非會員報名（公開活動）</button>' : '') +
+          '<div class="search">' + icon('search') + '<input type="search" data-filter="proxy" placeholder="搜尋姓名、職稱、公司" aria-label="搜尋會員"></div>' +
+          '<div id="proxy-list" class="menu">' + proxyRows(cands, '') + '</div>' +
+          (d.audienceLevel > 0 ? '<p class="hint" style="margin-top:10px">只列出看得到這場活動（' + esc(audienceLabel(d.audience)) + '）的會員。</p>' : ''), '代為報名');
+      }).catch(fail);
+    },
+    proxyPick: function (el) {
+      var evId = el.getAttribute('data-event'), memberId = el.getAttribute('data-id');
+      var d = S.cache['event:' + evId];
+      busy(el, proxyCandidates(d)).then(function () { openProxyForm(evId, { memberId: memberId }); }).catch(fail);
+    },
+    proxyEdit: function (el) {
+      var evId = el.getAttribute('data-event');
+      busy(el, proxyCandidates(S.cache['event:' + evId])).then(function () {
+        openProxyForm(evId, { regId: el.getAttribute('data-reg') });
+      }).catch(fail);
+    },
+    proxyGuest: function (el) {
+      openProxyForm(el.getAttribute('data-event'), { guestNew: true });
+    },
+    proxyCancel: function (el) {
+      var evId = el.getAttribute('data-event'), regId = el.getAttribute('data-reg'), name = el.getAttribute('data-name');
+      var leave = el.getAttribute('data-leave') === '1';
+      confirmSheet({ title: leave ? '取消' + name + '的請假？' : '取消' + name + '的報名？',
+        body: leave ? '會回到「未回覆」。' : '名額會釋出給其他人。', ok: leave ? '取消請假' : '取消報名', cancel: '返回', danger: true })
+        .then(function (fd) {
+          if (!fd) return;
+          return Api.call('proxyRegister', { eventId: evId, regId: regId, reply: '取消' }).then(function (res) {
+            upsertEvent(res.event);
+            closeSheet();
+            render();
+            toast('已取消' + name + '的' + (leave ? '請假' : '報名'));
+          });
+        }).catch(fail);
     },
     walkin: function (el) {
       var id = el.getAttribute('data-id');
@@ -2830,6 +2976,28 @@
         toast('申請已送出');
       }).catch(fail);
     },
+    proxy: function (form, btn) {
+      var fd = new FormData(form);
+      var leave = fd.get('reply') === '請假';
+      var data = { eventId: fd.get('eventId'), reply: leave ? '請假' : '出席', count: Number(fd.get('count')) || 1,
+        note: String((leave ? fd.get('reason') : fd.get('note')) || '').trim(), notify: fd.get('notify') === 'on' };
+      var who = String(fd.get('who') || '');
+      if (fd.get('regId')) data.regId = fd.get('regId');
+      else if (fd.get('memberId')) data.memberId = fd.get('memberId');
+      else {
+        data.guest = { name: String(fd.get('gname') || '').trim(), phone: String(fd.get('gphone') || '').trim() };
+        if (!data.guest.name || !data.guest.phone) { toast('請填寫姓名與手機', 'error'); return; }
+        who = data.guest.name;
+      }
+      busy(btn, Api.call('proxyRegister', data)).then(function (res) {
+        upsertEvent(res.event);
+        closeSheet();
+        render();
+        var msg = '已幫' + who + (leave ? '請假' : '報名');
+        if (data.notify) msg += res.notified ? '，並用 LINE 通知' : res.notifyError ? '（LINE 通知沒送出）' : '（對方沒有綁定 LINE，沒有通知）';
+        toast(msg);
+      }).catch(fail);
+    },
     register: function (form, btn) {
       var fd = new FormData(form);
       var leave = fd.get('reply') === '請假';
@@ -3133,6 +3301,11 @@
       if (wl && S.walkinCands) wl.innerHTML = walkinRows(S.walkinCands, t.value);
       return;
     }
+    if (f === 'proxy') {
+      var pl = document.getElementById('proxy-list');
+      if (pl && S.proxyCands) pl.innerHTML = proxyRows(S.proxyCands, t.value);
+      return;
+    }
     if (f === 'audit') {
       S.auditQuery = t.value;
       var al = document.getElementById('audit-list');
@@ -3184,11 +3357,12 @@
       if (sb) sb.disabled = !e.target.checked;
       return;
     }
-    if (e.target.name === 'reply' && e.target.closest('form[data-form="register"]')) {
+    if (e.target.name === 'reply' && e.target.closest('form[data-form="register"], form[data-form="proxy"]')) {
       var rf = e.target.closest('form');
       rf.querySelectorAll('[data-reply]').forEach(function (el) { el.hidden = el.getAttribute('data-reply') !== e.target.value; });
       var sb = rf.querySelector('button[type=submit]');
-      if (sb) sb.textContent = e.target.value === '請假' ? '送出請假' : '確認報名';
+      var isProxy = rf.getAttribute('data-form') === 'proxy';
+      if (sb) sb.textContent = e.target.value === '請假' ? '送出請假' : isProxy ? (rf.regId.value ? '更新報名' : '代為報名') : '確認報名';
       return;
     }
     var pf = e.target.closest && e.target.closest('form[data-form="push"]');
