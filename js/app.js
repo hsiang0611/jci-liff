@@ -1608,7 +1608,10 @@
 
   function shopCard(m) {
     var s = m.shop;
-    return '<article class="card shop"><h3>' + esc(s.name) + '</h3><p class="shop-owner">' + esc(m.name) + (m.title ? '　' + esc(m.title) : '') + (m.industry ? '　·　' + esc(m.industry) : '') + '</p>' +
+    var meta = [m.title, m.industry].filter(Boolean).map(esc).join(' · ');
+    return '<article class="card shop"><h3 class="shop-name">' + esc(s.name) + '</h3>' +
+      '<div class="shop-owner"><span class="avatar avatar-txt" aria-hidden="true">' + esc(m.name.charAt(0)) + '</span>' +
+      '<p><b>' + esc(m.name) + '</b>' + (meta ? '<span>' + meta + '</span>' : '') + '</p></div>' +
       (s.offer ? '<p class="shop-offer">' + icon('gift') + '<b>會友優惠</b><span>' + esc(s.offer) + '</span></p>' : '') +
       (s.intro ? '<p class="shop-intro">' + esc(s.intro) + '</p>' : '') +
       (s.address || s.hours ? '<dl class="shop-info">' + (s.address ? '<div>' + icon('pin') + '<dd>' + esc(s.address) + '</dd></div>' : '') +
