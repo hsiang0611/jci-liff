@@ -16,8 +16,8 @@
    * 後端（Apps Script）也有修改時，再把 Schema.gs 的 APP_VERSION 與下面的 MIN_BACKEND_VERSION 改成同一個值；
    * 只改前端畫面時不用動後端，也不會出現「後端還是舊版本」。
    */
-  var APP_VERSION = '2026.10.23.5';
-  var MIN_BACKEND_VERSION = '2026.10.23.5';
+  var APP_VERSION = '2026.10.23.6';
+  var MIN_BACKEND_VERSION = '2026.10.23.6';
   window.APP_VERSION = APP_VERSION;
 
   /**
@@ -966,7 +966,7 @@
       '<button type="button" role="tab" aria-selected="' + (tab === 'people') + '" data-act="dirTab" data-v="people">會友</button>' +
       '<button type="button" role="tab" aria-selected="' + (tab === 'shops') + '" data-act="dirTab" data-v="shops">會友商家' + (shops ? '（' + shops + '）' : '') + '</button></div>';
     return topbar() + '<main class="view"><div class="page-head"><h1 class="page-title">會員通訊錄</h1>' +
-      '<button type="button" class="btn btn-small btn-ghost" data-go="officers">' + icon('award') + '歷屆幹部</button></div>' + seg +
+      '<button type="button" class="btn btn-small btn-ghost" data-go="officers/president">' + icon('award') + '歷屆會長</button></div>' + seg +
       '<div class="search" style="margin-top:12px">' + icon('search') + '<input type="search" data-filter="dir" placeholder="' + (tab === 'shops' ? '搜尋商家、地址、優惠' : '搜尋姓名、職稱、公司') + '" value="' + esc(S.dirQuery) + '" aria-label="搜尋"></div>' +
       chips + body + '</main>';
   }
@@ -1081,7 +1081,7 @@
       var todo = S.polls.filter(function (p) { return p.open && !p.myChoices; }).length;
       more.push(['polls', 'vote', '調查', todo ? todo + ' 份等你回覆' : '時間、地點調查', todo]);
     }
-    if (perm('directory')) more.push(['officers', 'award', '歷屆幹部', '本屆與歷年幹部、歷屆會長、歷屆主席']);
+    if (perm('directory')) more.push(['officers/president', 'award', '歷屆會長、歷屆主席', '依年份排列']);
     if (me.member) more.push(['@subscribeCal', 'calplus', '訂閱活動行事曆', '活動自動出現在手機行事曆']);
     if (me.member) more.push(['@poster', 'qr', '招募海報', '印出來貼在活動現場，掃描就能認識我們']);
     if (more.length) {
@@ -1491,23 +1491,17 @@
     return html + '</main>';
   }
 
-  /* ═════════════ 歷屆幹部、年度交接 ═════════════ */
-
-  function officerList(items) {
-    return '<ul class="officers">' + items.map(function (o) {
-      return '<li><span class="off-title">' + esc(o.title || o.role) + '</span><b>' + esc(o.name) + '</b></li>';
-    }).join('') + '</ul>';
-  }
+  /* ═════════════ 歷屆會長、歷屆主席、年度交接 ═════════════ */
 
   var HONOR_TABS = { president: '歷屆會長', chair: '歷屆主席' };
 
-  /** 歷屆會長／主席的一列：年度（屆別）｜姓名（職稱、備註） */
+  /** 歷屆會長／主席的一列：年度（屆別）｜姓名（職稱、公司、備註） */
   function honorRows(kind, list) {
     var canEdit = perm('memberManage');
     return '<ol class="honors">' + list.map(function (x) {
       var no = x.termNo ? (/^\d+$/.test(x.termNo) ? '第 ' + x.termNo + ' 屆' : x.termNo) : '';
       var showTitle = x.title !== (kind === 'chair' ? '主席' : '會長') ? x.title : '';
-      var sub = [showTitle, x.note].filter(Boolean).join('・');
+      var sub = [showTitle, x.company, x.note].filter(Boolean).join('・');
       return '<li' + (x.current ? ' class="is-current"' : '') + '><div class="honor-year"><b>' + esc(x.term || '本屆') + '</b>' + (no ? '<span>' + esc(no) + '</span>' : '') + '</div>' +
         '<div class="honor-who"><b>' + esc(x.name) + '</b>' + (x.current ? '<span class="pill is-ok">現任</span>' : '') +
         (sub ? '<span class="honor-sub">' + esc(sub) + '</span>' : '') + '</div>' +
@@ -1525,34 +1519,24 @@
       (perm('memberManage') ? '<button type="button" class="btn btn-small btn-ghost" data-act="honorAdd" data-kind="' + kind + '">' + icon('plus') + '新增</button>' : '') + '</div>';
     if (!all.length) {
       return html + empty('還沒有歷屆' + label + '的資料', perm('memberManage')
-        ? '按「新增」一筆一筆加，或在試算表「歷屆幹部」工作表填入年度、姓名、職稱「' + (kind === 'president' ? '會長' : '特友會主席') + '」。'
+        ? '按「新增」從會員名單選人，或在試算表「歷屆' + label + '」工作表填寫（姓名可以下拉選）。'
         : '秘書處補上資料後就會出現在這裡。');
     }
     return html + honorRows(kind, list) +
-      (kind === 'chair' ? '<p class="hint">職稱含「主席」的都會列在這裡（例如特友會主席、監事會主席）。</p>' : '') +
-      (perm('memberManage') ? '<p class="hint">更早的年份也可以直接在試算表「歷屆幹部」工作表補：年度（西元或民國都可以）、姓名、職稱，屆別與備註可留空。</p>' : '');
+      (perm('memberManage') ? '<p class="hint">也可以在試算表「歷屆' + label + '」工作表維護：姓名從會員名單下拉選，會員編號與公司會自動帶入；年度寫西元或民國都可以。</p>' : '');
   }
 
   function viewOfficers(r) {
     if (!perm('directory')) return forbidden();
-    var tab = HONOR_TABS[r && r.a] ? r.a : 'all';
+    var tab = HONOR_TABS[r && r.a] ? r.a : 'president';
     var d = ensure('officers', function () { return Api.call('officers'); });
-    var tool = perm('memberManage') && tab === 'all' ? '<button type="button" class="btn btn-small btn-ghost" data-go="admin/handover">年度交接</button>' : '';
-    var html = topbar({ back: 'directory', title: HONOR_TABS[tab] || '歷屆幹部', actions: tool }) + '<main class="view">';
-    var h = d && !d.__error && d.honors ? d.honors : null;
-    html += '<div class="seg" role="tablist" aria-label="歷屆名單">' + [['all', '歷屆幹部'], ['president', '歷屆會長'], ['chair', '歷屆主席']].map(function (x) {
-      return '<button type="button" role="tab" aria-selected="' + (tab === x[0]) + '" data-go="officers' + (x[0] === 'all' ? '' : '/' + x[0]) + '" data-replace="1">' + x[1] + '</button>';
+    var html = topbar({ back: 'directory', title: HONOR_TABS[tab] }) + '<main class="view">';
+    html += '<div class="seg" role="tablist" aria-label="歷屆名單">' + [['president', '歷屆會長'], ['chair', '歷屆主席']].map(function (x) {
+      return '<button type="button" role="tab" aria-selected="' + (tab === x[0]) + '" data-go="officers/' + x[0] + '" data-replace="1">' + x[1] + '</button>';
     }).join('') + '</div>';
     if (!d) return html + skeleton(5) + '</main>';
     if (d.__error) return html + errorBlock(d.__error) + '</main>';
-    if (tab !== 'all') return html + honorView(tab, d) + '</main>';
-    html += '<h3 class="month">本屆幹部<small>' + d.current.length + ' 位</small></h3>' +
-      (d.current.length ? officerList(d.current) : '<p class="muted">名冊上還沒有幹部（角色是會長、理事等，或有填職稱的人）。</p>');
-    d.terms.forEach(function (t) {
-      html += '<h3 class="month">' + esc(t.term) + (/^\d{4}$/.test(t.term) ? ' 年度' : '') + '<small>' + t.list.length + ' 位</small></h3>' + officerList(t.list);
-    });
-    if (!d.terms.length) html += '<p class="hint" style="margin-top:14px">每年交接時把卸任幹部存檔，這裡就會留下歷屆名單。</p>';
-    return html + '</main>';
+    return html + honorView(tab, d) + '</main>';
   }
 
   function viewHandover() {
@@ -1572,7 +1556,7 @@
       if (!opts.some(function (r) { return r.role === cur; })) opts.unshift({ role: cur || '' });
       return opts.map(function (r) { return '<option' + (r.role === cur ? ' selected' : '') + '>' + esc(r.role) + '</option>'; }).join('');
     }
-    html += '<p class="summary">新年度開始前做一次：先把卸任幹部存進「歷屆幹部」，再一次更新新年度的角色與職稱。</p>';
+    html += '<p class="summary">新年度開始前做一次：先把卸任幹部存進試算表「歷屆幹部」工作表（卸任的會長、主席也會自動加進歷屆會長、歷屆主席），再一次更新新年度的角色與職稱。</p>';
     html += '<form class="form" data-form="handover" novalidate>';
     html += '<section class="step"><h2><span class="step-n">1</span>存檔卸任幹部</h2>' +
       field('卸任年度', '<input id="h-term" name="term" maxlength="20" required value="' + term + '">', '同一年度重複存檔會覆蓋原本的紀錄，不會重複', 'h-term') +
@@ -1617,22 +1601,37 @@
     if (el) el.innerHTML = '存檔 <b>' + h.archive.length + '</b> 位卸任幹部、更新 <b>' + h.changes.length + '</b> 位會員';
   }
 
-  function openHonorForm(kind, item) {
+  /** 通訊錄名單（有快取就用快取） */
+  function loadDirectory() {
+    return S.cache.directory && !S.cache.directory.__error ? Promise.resolve(S.cache.directory)
+      : Api.call('directory').then(function (l) { S.cache.directory = l; return l; });
+  }
+  function honorAutoText(m) {
+    if (!m) return '不在會員名單的人，只會記姓名。';
+    return '會自動帶入：會員編號 ' + m.id + (m.company ? '、' + m.company : '');
+  }
+  function openHonorForm(kind, item, members) {
     var label = kind === 'president' ? '會長' : '主席';
-    var names = (Array.isArray(S.cache.directory) ? S.cache.directory : []).map(function (m) { return m.name; });
+    members = (members || []).slice().sort(byName);
+    var picked = item ? members.filter(function (m) { return m.id === item.memberId; })[0] || null : null;
+    var other = !!item && !picked;
+    var opts = '<option value="">請選擇會員</option>' + members.map(function (m) {
+      return '<option value="' + esc(m.id) + '"' + (picked && picked.id === m.id ? ' selected' : '') + '>' + esc(m.name + (m.company ? '　' + m.company : '')) + '</option>';
+    }).join('') + '<option value="__other"' + (other ? ' selected' : '') + '>不在會員名單（自己輸入姓名）</option>';
+    S.honorMembers = members;
     openSheet('<h2 class="sheet-title">' + (item ? '修改' : '新增') + '歷屆' + label + '</h2>' +
       '<form class="form" data-form="honor" novalidate><input type="hidden" name="kind" value="' + kind + '"><input type="hidden" name="key" value="' + esc(item ? item.key : '') + '">' +
       '<div class="field-row">' +
       field('年度', '<input id="h-year" name="term" required maxlength="20" inputmode="numeric" value="' + esc(item ? item.term : '') + '" placeholder="例如 2025">', '西元或民國年都可以', 'h-year') +
       field('屆別（選填）', '<input id="h-no" name="termNo" maxlength="10" inputmode="numeric" value="' + esc(item ? item.termNo : '') + '" placeholder="例如 39">', '', 'h-no') + '</div>' +
-      field('姓名', '<input id="h-name" name="name" required maxlength="30" list="h-names" autocomplete="off" value="' + esc(item ? item.name : '') + '">' +
-        (names.length ? '<datalist id="h-names">' + names.map(function (n) { return '<option value="' + esc(n) + '">'; }).join('') + '</datalist>' : ''), '', 'h-name') +
+      field('姓名', '<select id="h-member" name="memberId">' + opts + '</select>', '<span id="h-auto">' + esc(picked || other ? honorAutoText(picked) : '從會員名單選，會自動帶入會員編號與公司') + '</span>', 'h-member') +
+      '<div data-other' + (other ? '' : ' hidden') + '>' + field('姓名（不在會員名單）', '<input id="h-name" name="name" maxlength="30" autocomplete="off" value="' + esc(other ? item.name : '') + '">', '', 'h-name') + '</div>' +
       (kind === 'chair'
         ? field('職稱', '<input id="h-title" name="title" required maxlength="40" value="' + esc(item ? item.title : '主席') + '" placeholder="例如：特友會主席">', '要包含「主席」兩個字', 'h-title')
-        : '<input type="hidden" name="title" value="' + esc(item ? item.title : '會長') + '">') +
-      field('備註（選填）', '<input id="h-note" name="note" maxlength="60" value="' + esc(item ? item.note : '') + '" placeholder="例如：創會會長、現任特友會長">', '', 'h-note') +
+        : '') +
+      field('備註（選填）', '<input id="h-note" name="note" maxlength="60" value="' + esc(item ? item.note : '') + '" placeholder="例如：創會會長、連任">', '', 'h-note') +
       '<div class="form-actions"><button type="submit" class="btn btn-primary btn-block">儲存</button>' +
-      (item ? '<button type="button" class="btn btn-ghost is-danger btn-block" data-act="honorDelete" data-key="' + esc(item.key) + '" data-name="' + esc(item.term + ' ' + item.name) + '">刪除這筆</button>' : '') +
+      (item ? '<button type="button" class="btn btn-ghost is-danger btn-block" data-act="honorDelete" data-kind="' + kind + '" data-key="' + esc(item.key) + '" data-name="' + esc(item.term + ' ' + item.name) + '">刪除這筆</button>' : '') +
       '</div></form>', (item ? '修改' : '新增') + '歷屆' + label);
   }
 
@@ -2910,19 +2909,22 @@
       render();
     },
     honorSort: function () { S.honorDesc = !S.honorDesc; render(); },
-    honorAdd: function (el) { openHonorForm(el.getAttribute('data-kind'), null); },
+    honorAdd: function (el) {
+      var kind = el.getAttribute('data-kind');
+      busy(el, loadDirectory()).then(function (list) { openHonorForm(kind, null, list); }).catch(fail);
+    },
     honorEdit: function (el) {
       var kind = el.getAttribute('data-kind'), key = el.getAttribute('data-key');
       var d = S.cache.officers;
       var item = d && d.honors ? (d.honors[kind] || []).filter(function (x) { return x.key === key; })[0] : null;
-      if (item) openHonorForm(kind, item);
+      if (item) busy(el, loadDirectory()).then(function (list) { openHonorForm(kind, item, list); }).catch(fail);
     },
     honorDelete: function (el) {
-      var key = el.getAttribute('data-key'), name = el.getAttribute('data-name');
-      confirmSheet({ title: '刪除這筆紀錄？', body: esc(name) + ' 的這筆紀錄會從「歷屆幹部」工作表刪除。', ok: '刪除', cancel: '返回', danger: true })
+      var key = el.getAttribute('data-key'), name = el.getAttribute('data-name'), kind = el.getAttribute('data-kind');
+      confirmSheet({ title: '刪除這筆紀錄？', body: esc(name) + ' 會從試算表「' + (HONOR_TABS[kind] || '') + '」工作表刪除。', ok: '刪除', cancel: '返回', danger: true })
         .then(function (fd) {
           if (!fd) return;
-          return Api.call('deleteHonor', { key: key }).then(function (d) {
+          return Api.call('deleteHonor', { kind: kind, key: key }).then(function (d) {
             S.cache.officers = d;
             closeSheet();
             render();
@@ -3121,15 +3123,24 @@
     honor: function (form, btn) {
       var fd = new FormData(form);
       var data = { kind: fd.get('kind'), term: String(fd.get('term') || '').trim(), termNo: String(fd.get('termNo') || '').trim(),
-        name: String(fd.get('name') || '').trim(), title: String(fd.get('title') || '').trim(), note: String(fd.get('note') || '').trim() };
+        title: String(fd.get('title') || '').trim(), note: String(fd.get('note') || '').trim() };
       if (fd.get('key')) data.key = fd.get('key');
+      var mid = String(fd.get('memberId') || ''), who;
       if (!/\d/.test(data.term)) { toast('請填年度，例如 2025', 'error'); form.term.focus(); return; }
-      if (!data.name) { toast('請填姓名', 'error'); form.name.focus(); return; }
+      if (!mid) { toast('請從會員名單選人', 'error'); form.memberId.focus(); return; }
+      if (mid === '__other') {
+        data.name = String(fd.get('name') || '').trim();
+        if (!data.name) { toast('請輸入姓名', 'error'); form.querySelector('[name="name"]').focus(); return; }
+        who = data.name;
+      } else {
+        data.memberId = mid;
+        who = (form.memberId.selectedOptions[0] ? form.memberId.selectedOptions[0].textContent : '').split('　')[0];
+      }
       busy(btn, Api.call('saveHonor', data)).then(function (d) {
         S.cache.officers = d;
         closeSheet();
         render();
-        toast(data.key ? '已更新' : '已新增 ' + data.term + ' ' + data.name);
+        toast(data.key ? '已更新' : '已新增 ' + data.term + ' ' + who);
       }).catch(fail);
     },
     proxy: function (form, btn) {
@@ -3340,8 +3351,8 @@
           S.cache.members = res.members;
           delete S.cache.officers;
           delete S.cache.directory;
-          toast('交接完成：存檔 ' + res.archived + ' 位、更新 ' + res.changed + ' 位');
-          go('officers', true);
+          toast('交接完成：存檔 ' + res.archived + ' 位、更新 ' + res.changed + ' 位' + (res.honors ? '，' + res.honors + ' 位加入歷屆會長／主席' : ''));
+          go(res.honors ? 'officers/president' : 'me', true);
         });
       }).catch(fail);
     },
@@ -3377,7 +3388,7 @@
     shop: function (form, btn) {
       var fd = new FormData(form);
       var d = { name: String(fd.get('name') || '').trim(), intro: fd.get('intro'), offer: fd.get('offer'), address: fd.get('address'), hours: fd.get('hours'), url: String(fd.get('url') || '').trim() };
-      if (!d.name) { toast('請填寫商家名稱', 'error'); form.name.focus(); return; }
+      if (!d.name) { toast('請填寫商家名稱', 'error'); form.querySelector('[name="name"]').focus(); return; }
       busy(btn, Api.call('updateShop', d)).then(function (me) {
         S.me = me;
         delete S.cache.directory;
@@ -3504,6 +3515,15 @@
     if (e.target.id === 'u-industry') {
       var ot = document.getElementById('u-industry-other');
       if (ot) { ot.hidden = e.target.value !== '__other'; if (!ot.hidden) ot.focus(); }
+      return;
+    }
+    if (e.target.id === 'h-member') {
+      var hform = e.target.closest('form'), v = e.target.value;
+      var box = hform.querySelector('[data-other]');
+      if (box) { box.hidden = v !== '__other'; if (!box.hidden) box.querySelector('input').focus(); }
+      var m = (S.honorMembers || []).filter(function (x) { return x.id === v; })[0] || null;
+      var auto = document.getElementById('h-auto');
+      if (auto) auto.textContent = v ? honorAutoText(m) : '從會員名單選，會自動帶入會員編號與公司';
       return;
     }
     var hf = e.target.closest && e.target.closest('form[data-form="handover"]');
