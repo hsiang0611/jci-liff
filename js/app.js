@@ -11,9 +11,25 @@
 
   var CFG = window.APP_CONFIG || {};
 
-  /** 版本：每次更新前端時改這裡，並同步改後端 Schema.gs 的 APP_VERSION 與 index.html 的 ?v= */
-  var APP_VERSION = '2026.10.23.3';
+  /**
+   * 版本：每次更新前端時改這裡，並同步改 index.html 所有的 ?v=。
+   * 後端（Apps Script）也有修改時，再把 Schema.gs 的 APP_VERSION 與下面的 MIN_BACKEND_VERSION 改成同一個值；
+   * 只改前端畫面時不用動後端，也不會出現「後端還是舊版本」。
+   */
+  var APP_VERSION = '2026.10.23.4';
+  var MIN_BACKEND_VERSION = '2026.10.23.3';
   window.APP_VERSION = APP_VERSION;
+
+  /**
+   * index.html 要求的版本（app.js?v=…）。跟上面的 APP_VERSION 不同，代表手機拿到的是暫存的舊 app.js，
+   * 常見原因是網站檔案分兩次上傳（先傳 index.html、隔一兩分鐘才傳 js）。啟動時會自動重新下載一次。
+   */
+  var REQUESTED_VERSION = (function () {
+    try {
+      var m = /[?&]v=([^&#]+)/.exec(document.currentScript ? document.currentScript.src : '');
+      return m ? decodeURIComponent(m[1]) : '';
+    } catch (e) { return ''; }
+  })();
 
   /**
    * 「同意顯示電話於通訊錄」條文。要修改文字就改這裡，每一項一行。
@@ -341,7 +357,9 @@
   function applyInit(d, keepCache) {
     S.serverVersion = d.version || '';
     S.updateNeeded = !!d.version && cmpVer(d.version, APP_VERSION) > 0;
-    S.backendOld = cmpVer(d.version || '0', APP_VERSION) < 0;
+    S.backendOld = cmpVer(d.version || '0', MIN_BACKEND_VERSION) < 0;
+    // 伺服器比較新：先在背景把網站檔案重新下載一次，等一下按「重新整理」就會是新版
+    if (S.updateNeeded && !S.assetsRefreshed) { S.assetsRefreshed = true; refreshAssets(); }
     S.me = d.me;
     // 由低到高；同等級時反過來，這樣 .reverse() 就是後端（權限表）的順序
     S.roles = (d.roles || []).map(function (r, i) { return Object.assign({ _i: i }, r); })
@@ -1724,8 +1742,51 @@
     return 0;
   }
 
+  /* ── 更新到新版：重新下載網站檔案（略過手機暫存），再重新載入 ── */
+  function refreshAssets() {
+    if (!window.fetch) return Promise.resolve();
+    var urls = [location.pathname];
+    Array.prototype.forEach.call(document.querySelectorAll('script[src], link[rel="stylesheet"][href]'), function (el) {
+      var u = el.getAttribute('src') || el.getAttribute('href');
+      if (u && !/^(https?:)?\/\//i.test(u)) urls.push(new URL(u, location.href).toString()); // 只處理自己網站的檔案
+    });
+    var jobs = urls.map(function (u) {
+      return fetch(u, { cache: 'reload', credentials: 'same-origin' }).catch(function () {});
+    });
+    return Promise.race([Promise.all(jobs), new Promise(function (r) { setTimeout(r, 5000); })]);
+  }
+  function reloadFresh() {
+    var q = new URLSearchParams(location.search);
+    q.set('v', String(Date.now()));
+    location.replace(location.pathname + '?' + q.toString() + location.hash);
+  }
+  /** 手機拿到的 app.js 跟 index.html 要求的版本不同：重新下載後重整一次（同一組版本只試一次，不會一直重整） */
+  function healStaleFiles() {
+    if (!REQUESTED_VERSION || REQUESTED_VERSION === APP_VERSION) return false;
+    var key = REQUESTED_VERSION + '>' + APP_VERSION;
+    try {
+      if (localStorage.getItem('jci.heal') === key) return false;
+      localStorage.setItem('jci.heal', key);
+    } catch (e) { return false; }
+    refreshAssets().then(reloadFresh);
+    return true;
+  }
+  /** 這個版本已經按過「重新整理」但還是舊檔（手機暫存還沒過期） */
+  function updateTried() {
+    try {
+      var t = JSON.parse(localStorage.getItem('jci.updTry') || 'null');
+      return !!(t && t.from === APP_VERSION && t.to === S.serverVersion && Date.now() - t.at < 3600000);
+    } catch (e) { return false; }
+  }
+
   function versionBar() {
-    if (S.updateNeeded) {
+    if (S.updateNeeded && !S.updDismissed) {
+      if (updateTried()) {
+        return '<div class="updbar is-soft" role="status"><span>新版已經發布，手機上暫存的舊檔還沒過期，通常 10 分鐘內會自動換成新版。' +
+          '<small>目前 ' + esc(APP_VERSION) + '，新版 ' + esc(S.serverVersion) + '</small></span>' +
+          '<span class="updbar-acts"><button type="button" class="btn btn-small btn-onbrand" data-act="hardReload">再試一次</button>' +
+          '<button type="button" class="btn btn-small btn-onbrand-ghost" data-act="updDismiss">稍後</button></span></div>';
+      }
       return '<div class="updbar" role="status"><span>系統已更新，請重新整理使用新版</span><button type="button" class="btn btn-small btn-onbrand" data-act="hardReload">重新整理</button></div>';
     }
     if (S.backendOld && anyAdmin()) {
@@ -2696,11 +2757,12 @@
         }).catch(fail);
       }, 240);
     },
-    hardReload: function () {
-      var q = new URLSearchParams(location.search);
-      q.set('v', String(Date.now()));
-      location.replace(location.pathname + '?' + q.toString() + location.hash);
+    hardReload: function (el) {
+      try { localStorage.setItem('jci.updTry', JSON.stringify({ from: APP_VERSION, to: S.serverVersion, at: Date.now() })); } catch (e) { /* 無痕模式 */ }
+      if (el) { el.disabled = true; el.textContent = '更新中…'; }
+      refreshAssets().then(reloadFresh);
     },
+    updDismiss: function () { S.updDismissed = true; render(); },
     attTab: function (el) { S.attTab = el.getAttribute('data-v'); render(); },
     exportAtt: function (el) {
       busy(el, Api.call('exportAttendance', { year: Number(el.getAttribute('data-year')) })).then(function (res) {
@@ -3394,6 +3456,7 @@
   function start() {
     window.__appStarted = true;
     $app.innerHTML = bootScreen();
+    if (healStaleFiles()) return; // 拿到暫存的舊檔：重新下載後會自動重整
     Api.onRetry = function (action, n) { if (n === 1) toast('使用的人比較多，正在重試…'); };
     Api.init().then(function (info) {
       S.demo = info.demo;
