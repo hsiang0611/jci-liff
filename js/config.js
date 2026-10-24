@@ -8,8 +8,12 @@ window.APP_CONFIG = {
   // LINE Developers → LINE Login channel → LIFF 分頁的 LIFF ID，例如 '2001234567-AbCdEfGh'
   LIFF_ID: '2012134116-hfQ9YMRC',
 
-  // Apps Script 部署後的網頁應用程式網址，結尾是 /exec
-  API_URL: 'https://script.google.com/macros/s/AKfycbwJaJCbMiSCPv3l3LWd4nu1r0BnySWO1AldvyORgtetXvJxuLhgm7qs2Gq1bsEZJhcf/exec',
+  // 後端網址：Apps Script 部署後的網頁應用程式網址（結尾 /exec）；
+  // 有建加速層（Cloudflare Worker，見 README）就改填 Worker 網址，例如 'https://jci-api.你的帳號.workers.dev'
+  API_URL: 'https://jci-api.xxx.workers.dev',
+
+  // 選填：有用加速層時，這裡填原本的 Apps Script 網址，加速層連不上時 App 會自動改走這裡
+  GAS_URL: 'https://script.google.com/macros/s/AKfycbwJaJCbMiSCPv3l3LWd4nu1r0BnySWO1AldvyORgtetXvJxuLhgm7qs2Gq1bsEZJhcf/exec',
 
   // 官方帳號的 Basic ID（含 @），用於「加入好友」按鈕，例如 '@123abcde'
   OA_BASIC_ID: '@183svval',
