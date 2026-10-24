@@ -147,6 +147,10 @@ h1, h2, h3, p { margin: 0; }
 .notice b { font-size: 15px; }
 .notice p { font-size: 13px; color: var(--muted); margin-top: 2px; }
 .banner { margin-top: 12px; padding: 10px 14px; border-radius: var(--r-sm); font-size: 14px; font-weight: 600; }
+.view > .banner:first-child { margin-top: 0; margin-bottom: 12px; }
+.banner.is-ok b, .banner.is-muted b, .banner.is-danger b { font-size: 15px; }
+.banner b + br + * , .view .banner { font-weight: 500; }
+.view .banner b { font-weight: 700; }
 .banner.is-danger { background: var(--danger-soft); color: var(--danger); }
 .banner.is-muted { background: var(--paper); color: var(--ink-2); border: 1px dashed var(--line); }
 
@@ -833,6 +837,29 @@ input[type=radio], input[type=checkbox] { width: 20px; height: 20px; accent-colo
 .updbar small { display: block; opacity: .75; font-size: 12px; }
 .updbar-acts { display: flex; gap: 8px; flex: none; margin-left: auto; }
 .updbar .btn-onbrand-ghost { height: 32px; }
+
+/* ── 連線狀況 ── */
+.net-sum { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin: 0 0 12px; }
+.net-sum div { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 12px 14px; display: flex; flex-direction: column; }
+.net-sum span { font-size: 12.5px; color: var(--muted); }
+.net-sum b { font-family: var(--num); font-size: 26px; line-height: 1.1; margin-top: 4px; }
+.net-sum b small { font-size: 13px; font-family: var(--font); font-weight: 500; color: var(--muted); }
+.net-sum em { font-style: normal; font-size: 12px; color: var(--muted); }
+.netlog { list-style: none; margin: 0; padding: 0 12px 0 16px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); }
+.netlog li { display: flex; align-items: center; gap: 10px; padding: 9px 0; }
+.netlog li + li { border-top: 1px solid var(--line); }
+.netlog li > div:first-child { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.netlog li > div:first-child b { font-size: 14.5px; font-weight: 600; }
+.netlog li > div:first-child span { font-size: 12px; color: var(--muted); }
+.net-ms { flex: none; text-align: right; font-family: var(--num); display: flex; flex-direction: column; line-height: 1.15; white-space: nowrap; }
+.net-ms b { font-size: 17px; }
+.net-ms b + small, .net-ms b { display: inline; }
+.net-ms > b::after { content: " ms"; font-size: 12px; color: var(--muted); font-family: var(--font); }
+.net-ms small { display: block; }
+.net-ms small { font-size: 11.5px; color: var(--muted); font-family: var(--font); }
+.netlog li.is-hit .net-ms b { color: var(--ok); }
+.netlog li.is-err .net-ms b { color: var(--danger); }
+.netlog .pill { flex: none; }
 
 /* ── 會員證（訪客）按鈕 ── */
 .mcard-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
