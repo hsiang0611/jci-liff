@@ -16,8 +16,8 @@
    * 後端（Apps Script）也有修改時，再把 Schema.gs 的 APP_VERSION 與下面的 MIN_BACKEND_VERSION 改成同一個值；
    * 只改前端畫面時不用動後端，也不會出現「後端還是舊版本」。
    */
-  var APP_VERSION = '2026.10.23.6';
-  var MIN_BACKEND_VERSION = '2026.10.23.6';
+  var APP_VERSION = '2026.10.23.7';
+  var MIN_BACKEND_VERSION = '2026.10.23.7';
   window.APP_VERSION = APP_VERSION;
 
   /**
@@ -261,6 +261,7 @@
     pinned: 'M9 3.5h6l-1 5.5 3 3H7l3-3zM12 12v8.5',
     refresh: 'M20 11.5A8 8 0 1 1 17.7 6M20 4.5v5h-5',
     shield: 'M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z',
+    pulse: 'M3 12h4l2.5-6 4 12 2.5-6H21',
     link: 'M10 14a4 4 0 0 0 5.7 0l3-3A4 4 0 0 0 13 5.3l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1',
     trash: 'M4.5 7h15M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13',
     chat: 'M12 4.5c5 0 9 3 9 6.8s-4 6.8-9 6.8c-.8 0-1.6-.1-2.3-.2L5 20l.9-3.4C4.2 15.4 3 13.5 3 11.3 3 7.5 7 4.5 12 4.5z',
@@ -1105,6 +1106,7 @@
         items.push(['admin/members', 'users', '會員管理', '角色、狀態、LINE 綁定']);
         items.push(['admin/handover', 'swap', '年度交接', '存檔卸任幹部、一次更新新年度職務']);
         items.push(['admin/audit', 'shield', '操作紀錄', '誰在什麼時候改了什麼']);
+        items.push(['admin/net', 'pulse', '連線狀況', S.demo ? '示範模式不連後端' : Api.edgeSeen ? '加速層使用中' : '每次呼叫花了多久']);
       }
       if (perm('duesManage')) items.push(['admin/dues', 'coin', '會費管理', '登錄繳費、提醒未繳']);
       html += '<section class="block"><div class="block-head"><h2>' + (anyAdmin() ? '管理功能' : '幹部功能') + '</h2></div><div class="menu">' + items.map(function (it) {
@@ -1915,6 +1917,42 @@
 
   /* ═════════════ 操作紀錄 ═════════════ */
 
+  /* ═════════════ 連線狀況（管理員看每次呼叫的耗時、加速層有沒有生效） ═════════════ */
+  function viewNet() {
+    if (!anyAdmin()) return forbidden();
+    var list = Api.stats.slice().reverse();
+    var html = topbar({ back: 'me', title: '連線狀況', actions: '<button type="button" class="btn btn-small btn-ghost" data-act="netTest">再測一次</button>' }) + '<main class="view">';
+    var status;
+    if (S.demo) status = ['is-muted', '示範模式', '沒有連到後端，這裡只有示範資料。'];
+    else if (Api.fallbackActive) status = ['is-danger', '加速層連不上，已改走 Apps Script', '這次打開期間都直接連 Apps Script；請到 Cloudflare 看 Worker 是否正常。'];
+    else if (Api.edgeSeen) status = ['is-ok', '加速層使用中', '讀取類的動作命中暫存時，不用等 Apps Script。'];
+    else status = ['is-muted', '直接連 Apps Script', '沒有偵測到加速層。想加快速度，照 README「加速層」一節建立 Cloudflare Worker。'];
+    html += '<div class="banner ' + status[0] + '"><b>' + esc(status[1]) + '</b><br>' + esc(status[2]) + '</div>';
+    var done = list.filter(function (x) { return !x.err && x.action.charAt(0) !== '（'; });
+    function avg(arr) { return arr.length ? Math.round(arr.reduce(function (a, x) { return a + x.ms; }, 0) / arr.length) : null; }
+    var hits = done.filter(function (x) { return x.edge === 'HIT'; }), miss = done.filter(function (x) { return x.edge === 'MISS' || x.edge === 'BYPASS'; }), direct = done.filter(function (x) { return !x.edge; });
+    var cells = [];
+    if (hits.length) cells.push(['命中暫存', avg(hits), hits.length]);
+    if (miss.length) cells.push(['經加速層到 Apps Script', avg(miss), miss.length]);
+    if (direct.length) cells.push(['直連 Apps Script', avg(direct), direct.length]);
+    if (cells.length) {
+      html += '<div class="net-sum">' + cells.map(function (c) {
+        return '<div><span>' + esc(c[0]) + '</span><b>' + c[1] + '<small> ms</small></b><em>' + c[2] + ' 次</em></div>';
+      }).join('') + '</div>';
+    }
+    html += '<p class="hint">時間是從手機送出到收到回應。Apps Script 通常要 1～3 秒，閒置一陣子後的第一次可能更久；命中暫存通常 0.3 秒內。</p>';
+    if (!list.length) return html + empty('還沒有紀錄', '在 App 裡操作幾個畫面後再回來看。') + '</main>';
+    html += '<ol class="netlog">' + list.map(function (x) {
+      var cls = x.err ? 'is-err' : x.edge === 'HIT' ? 'is-hit' : '';
+      var tag = x.err ? (x.err === 'NETWORK' ? '連不上' : x.err === 'OVERLOAD' ? '忙碌' : 'HTTP ' + x.err)
+        : x.edge === 'HIT' ? '命中暫存' : x.edge === 'MISS' ? '加速層→後端' : x.edge === 'BYPASS' ? '寫入→後端' : (x.action.charAt(0) === '（' ? '' : '直連');
+      return '<li class="' + cls + '"><div><b>' + esc(x.action) + '</b><span>' + esc(fmtDT(new Date(x.at).toISOString()).replace(/^.*?）/, '')) + (x.note ? '　' + esc(x.note) : '') + '</span></div>' +
+        '<div class="net-ms">' + (x.ms ? '<b>' + x.ms + '</b>' : '') + (x.up ? '<small>後端 ' + x.up + ' ms</small>' : '') + '</div>' +
+        (tag ? '<span class="pill ' + (x.err ? 'is-danger' : x.edge === 'HIT' ? 'is-ok' : 'is-muted') + '">' + esc(tag) + '</span>' : '') + '</li>';
+    }).join('') + '</ol>';
+    return html + '</main>';
+  }
+
   function viewAudit() {
     if (!perm('memberManage')) return forbidden();
     var list = ensure('audit', function () { return Api.call('auditLog'); });
@@ -2119,6 +2157,7 @@
       if (r.a === 'handover') return viewHandover();
       if (r.a === 'dues') return viewDues();
       if (r.a === 'audit') return viewAudit();
+      if (r.a === 'net') return viewNet();
       return viewMe();
     }
   };
@@ -2907,6 +2946,13 @@
       S.dirTab = el.getAttribute('data-v') === 'shops' ? 'shops' : 'people';
       if (el.hasAttribute('data-q')) { S.dirQuery = el.getAttribute('data-q'); S.dirIndustry = ''; }
       render();
+    },
+    netTest: function (el) {
+      busy(el, Promise.all([Api.call('init'), Api.call('directory').catch(function () { return null; })])).then(function (r) {
+        applyInit(r[0]);
+        render();
+        toast('已重新測試');
+      }).catch(fail);
     },
     honorSort: function () { S.honorDesc = !S.honorDesc; render(); },
     honorAdd: function (el) {

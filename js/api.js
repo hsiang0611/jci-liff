@@ -12,6 +12,28 @@ window.Api = (function () {
   var RELOGIN_KEY = 'jci_relogin_at';
   var mode = 'live';
 
+  /**
+   * 後端網址：API_URL 可以是 Apps Script，也可以是前面加了加速層（Cloudflare Worker）的網址。
+   * 有另外填 GAS_URL 時，加速層連不上就自動改走 Apps Script（這次打開期間都走直連）。
+   */
+  var base = CFG.API_URL || '';
+  var fallbackActive = false;
+
+  /** 最近幾次呼叫的耗時（管理員的「連線狀況」會顯示） */
+  var stats = [];
+  var edgeSeen = false;
+  function record(entry) {
+    stats.push(entry);
+    if (stats.length > 40) stats.shift();
+  }
+  function switchToFallback(why) {
+    if (!CFG.GAS_URL || base === CFG.GAS_URL) return false;
+    base = CFG.GAS_URL;
+    fallbackActive = true;
+    record({ action: '（改走直連）', ms: 0, edge: '', note: why, at: Date.now() });
+    return true;
+  }
+
   function apiError(code, message) {
     var e = new Error(message);
     e.code = code;
@@ -78,16 +100,29 @@ window.Api = (function () {
     if (mode === 'demo') return window.Mock.call(action, data);
     var idToken = currentIdToken();
     if (!idToken) return relogin();
-    return fetch(CFG.API_URL, {
+    var t0 = Date.now(), entry = { action: action, ms: 0, edge: '', up: null, at: t0 };
+    return fetch(base, {
       method: 'POST',
       body: JSON.stringify({ action: action, idToken: idToken, data: data || {} })
     }).catch(function () {
+      entry.ms = Date.now() - t0; entry.err = 'NETWORK'; record(entry);
+      switchToFallback('連不上加速層');
       throw apiError('NETWORK', '連不上伺服器，請檢查網路後再試一次');
     }).then(function (res) {
-      if (!res.ok) throw apiError(res.status === 429 || res.status >= 500 ? 'OVERLOAD' : 'NETWORK', '伺服器回應異常（' + res.status + '）');
+      var edge = res.headers.get('X-Edge') || '';
+      entry.edge = edge;
+      entry.up = Number(res.headers.get('X-Edge-Upstream-Ms')) || null;
+      if (edge) edgeSeen = true;
+      if (!res.ok) {
+        entry.ms = Date.now() - t0; entry.err = String(res.status); record(entry);
+        if (!edge && res.status >= 500) switchToFallback('加速層回應 ' + res.status);
+        throw apiError(res.status === 429 || res.status >= 500 ? 'OVERLOAD' : 'NETWORK', '伺服器回應異常（' + res.status + '）');
+      }
       // Apps Script 同時執行過多時會回傳 HTML 錯誤頁，不是 JSON
       return res.text().then(function (t) {
-        try { return JSON.parse(t); } catch (e) { throw apiError('OVERLOAD', '伺服器忙碌中，請稍後再試'); }
+        entry.ms = Date.now() - t0;
+        entry.bytes = t.length;
+        try { var j = JSON.parse(t); record(entry); return j; } catch (e) { entry.err = 'OVERLOAD'; record(entry); throw apiError('OVERLOAD', '伺服器忙碌中，請稍後再試'); }
       });
     }).then(function (j) {
       if (j.ok) {
@@ -199,6 +234,10 @@ window.Api = (function () {
     loadScriptOnce: loadScriptOnce, set onRetry(fn) { onRetry = fn; },
     canShare: canShare, share: share, liffUrl: liffUrl, openExternal: openExternal,
     addFriendUrl: addFriendUrl, isInClient: isInClient, closeApp: closeApp, logout: logout,
-    get mode() { return mode; }
+    get mode() { return mode; },
+    get stats() { return stats.slice(); },
+    get edgeSeen() { return edgeSeen; },
+    get fallbackActive() { return fallbackActive; },
+    get baseUrl() { return base; }
   };
 })();
