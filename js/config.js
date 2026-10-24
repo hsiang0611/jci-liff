@@ -10,7 +10,7 @@ window.APP_CONFIG = {
 
   // 後端網址：Apps Script 部署後的網頁應用程式網址（結尾 /exec）；
   // 有建加速層（Cloudflare Worker，見 README）就改填 Worker 網址，例如 'https://jci-api.你的帳號.workers.dev'
-  API_URL: 'https://jci-api.xxx.workers.dev',
+  API_URL: 'jci-api.hsiang-13f.workers.dev',
 
   // 選填：有用加速層時，這裡填原本的 Apps Script 網址，加速層連不上時 App 會自動改走這裡
   GAS_URL: 'https://script.google.com/macros/s/AKfycbwJaJCbMiSCPv3l3LWd4nu1r0BnySWO1AldvyORgtetXvJxuLhgm7qs2Gq1bsEZJhcf/exec',
