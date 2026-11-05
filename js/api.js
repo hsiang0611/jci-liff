@@ -16,7 +16,15 @@ window.Api = (function () {
    * 後端網址：API_URL 可以是 Apps Script，也可以是前面加了加速層（Cloudflare Worker）的網址。
    * 有另外填 GAS_URL 時，加速層連不上就自動改走 Apps Script（這次打開期間都走直連）。
    */
-  var base = CFG.API_URL || '';
+  /** 網址少打 https:// 或多了結尾斜線時自動修正（常見的 config.js 筆誤） */
+  function normUrl(u) {
+    u = String(u || '').trim().replace(/\/+$/, '');
+    if (u && !/^https?:\/\//i.test(u)) u = 'https://' + u;
+    return u;
+  }
+  CFG.API_URL = normUrl(CFG.API_URL);
+  CFG.GAS_URL = normUrl(CFG.GAS_URL);
+  var base = CFG.API_URL;
   var fallbackActive = false;
 
   /** 最近幾次呼叫的耗時（管理員的「連線狀況」會顯示） */

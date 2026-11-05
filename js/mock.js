@@ -8,13 +8,14 @@ window.Mock = (function () {
   'use strict';
 
   var DAY = 86400000;
-  var P = function (d, e, n, r, p, m, f, x) {
-    return { directory: d, eventManage: e, newsManage: n, viewRegs: r, push: p, memberManage: m, duesManage: f, regProxy: x || 0 };
+  var ROC = new Date().getFullYear() - 1911;
+  var P = function (d, e, n, r, p, m, f, x, g) {
+    return { directory: d, eventManage: e, newsManage: n, viewRegs: r, push: p, memberManage: m, duesManage: f, regProxy: x || 0, meetingManage: g || 0 };
   };
   var ROLES = [
-    { role: '會長', level: 90, desc: '可管理會員、活動、消息、會費並發送推播', perms: P(1, 1, 1, 1, 1, 1, 1) },
-    { role: '秘書長', level: 90, desc: '會務總管：可管理會員、活動、消息、會費、代為報名並發送推播', perms: P(1, 1, 1, 1, 1, 1, 1, 1) },
-    { role: '管理員', level: 90, desc: '秘書處、系統管理者（不算幹部）', perms: P(1, 1, 1, 1, 1, 1, 1, 1) },
+    { role: '會長', level: 90, desc: '可管理會員、活動、消息、會費並發送推播', perms: P(1, 1, 1, 1, 1, 1, 1, 0, 1) },
+    { role: '秘書長', level: 90, desc: '會務總管：可管理會員、活動、消息、會費、代為報名並發送推播', perms: P(1, 1, 1, 1, 1, 1, 1, 1, 1) },
+    { role: '管理員', level: 90, desc: '秘書處、系統管理者（不算幹部）', perms: P(1, 1, 1, 1, 1, 1, 1, 1, 1) },
     { role: '財務長', level: 80, desc: '登錄會費；可發布活動與消息、看報名名單', perms: P(1, 1, 1, 1, 0, 0, 1) },
     { role: '副會長', level: 80, desc: '可發布活動與消息、看報名名單', perms: P(1, 1, 1, 1, 0, 0, 0) },
     { role: '理事', level: 75, desc: '可發布活動與消息、看報名名單', perms: P(1, 1, 1, 1, 0, 0, 0) },
@@ -178,6 +179,36 @@ window.Mock = (function () {
         { id: 'D4', title: '2026 年度行事曆', category: '行事曆', url: 'https://drive.google.com/file/d/demo-calendar', description: '例會、理監事會、公益服務日期', audience: '訪客', status: '發布', createdBy: '陳怡君', updatedAt: at(-200, 10) },
         { id: 'D5', title: '會服訂購單', category: '表單', url: 'https://forms.gle/demo-uniform', description: '11/30 截止', audience: '會員', status: '發布', createdBy: '吳佩珊', updatedAt: at(-3, 10) },
         { id: 'D6', title: '入會申請書', category: '表單', url: 'https://drive.google.com/file/d/demo-join', description: '請列印填寫後交給秘書處', audience: '訪客', status: '發布', createdBy: '陳怡君', updatedAt: at(-100, 10) }
+      ],
+      // 會議紀錄（示範：一場已開完的理事會、一場待開的理事會議程、一場去年的會員大會）
+      meetings: [
+        { id: 'MT1', year: ROC, term: 30, seq: 11, type: '理事會', title: '第三十屆第十一次理事會', date: at(-6, 20), location: '會館會議室', chair: '會長 王建宏', host: '秘書長 陳怡君', recorder: '秘書處',
+          present: '王建宏、陳怡君、周書豪、蔡宜蓁、李承翰、吳佩珊、林志豪、張雅婷、黃國明', observers: '許文彥、陳冠宇', expected: '11', actual: '9', note: '',
+          fileUrl: 'https://drive.google.com/file/d/demo-minutes-11/view', fileName: '第30屆第11次理事會會議紀錄.pdf', audience: '會員', status: '發布', createdBy: '陳怡君', updatedAt: at(-5, 10) },
+        { id: 'MT2', year: ROC, term: 30, seq: 12, type: '理事會', title: '第三十屆第十二次理事會', date: at(20, 20), location: '會館會議室', chair: '會長 王建宏', host: '秘書長 陳怡君', recorder: '秘書處',
+          present: '', observers: '', expected: '11', actual: '', note: '', fileUrl: '', fileName: '', audience: '會員', status: '發布', createdBy: '陳怡君', updatedAt: at(-1, 15) },
+        { id: 'MT3', year: ROC - 1, term: 29, seq: 2, type: '會員大會', title: '第二十九屆第二次會員大會', date: at(-330, 18, 30), location: '龍井區公所 3 樓禮堂', chair: '會長 黃國明', host: '秘書長 王建宏', recorder: '秘書處',
+          present: '', observers: '', expected: '38', actual: '31', note: '', fileUrl: 'https://drive.google.com/file/d/demo-ga-29/view', fileName: '', audience: '會員', status: '發布', createdBy: '王建宏', updatedAt: at(-320, 10) },
+        { id: 'MT4', year: ROC, term: 30, seq: 1, type: '籌備會', title: '第三十一屆第一次會長交接典禮籌備會', date: at(-12, 20), location: '會館會議室', chair: '交接籌備會總幹事 蔡宜蓁', host: '秘書長 陳怡君', recorder: '秘書處',
+          present: '', observers: '', expected: '', actual: '', note: '', fileUrl: '', fileName: '', audience: '幹部', status: '草稿', createdBy: '陳怡君', updatedAt: at(-12, 22) }
+      ],
+      motions: [
+        { id: 'MO1', meetingId: 'MT1', no: '一', subject: '提請通過參加鳳山兄弟會交接典禮時間、地點、經費討論案', proposer: '理事 蔡宜蓁', seconder: '副會長 李承翰',
+          explain: '依鳳山兄弟會來函辦理', method: '1. 時間：' + (ROC) + ' 年 11 月 6 日(五)17:00\n2. 地點：和樂宴會館-鳳山店\n3. 經費：由兄弟友好委員會項下匯撥車資新台幣 $18,000 元\n4. 集合時間：12:00，本會會館', resolution: '照說明及辦法通過' },
+        { id: 'MO2', meetingId: 'MT1', no: '二', subject: '提請通過舉辦「共識營」活動討論案', proposer: '理事 吳佩珊', seconder: '副會長 李承翰',
+          explain: '為凝聚會務團隊向心力及找尋共同核心價值，特別舉辦此課程', method: '1. 日期：12 月 27 日(日)\n2. 時間：08:00–17:00\n3. 經費：由新任會長財開', resolution: '照說明及辦法討論後通過' },
+        { id: 'MO3', meetingId: 'MT1', no: '三', subject: '提請通過優秀社會青年申請入會見習資格審核案', proposer: '理事 林志豪', seconder: '副會長 李承翰',
+          explain: '依本會章程辦理', method: '1. 繳交見習會費 $3,000 元始得成為本會見習會友\n2. 見習滿三個月並參加三次例會得申請加入本會成為正式會員', resolution: '通過，共 3 位' },
+        { id: 'MO4', meetingId: 'MT1', no: '四', subject: '提請通過「青商家庭中秋聯歡晚會」活動經費收支審核案', proposer: '財務長 周書豪', seconder: '副會長 李承翰',
+          explain: '1. 依第九次理事會會議紀錄案由（二）決議辦理\n2. 收支明細及贊助名單詳如附件四、附件五', method: '結餘款 $43,333 元撥入「青商夫人姑爺聯誼」活動使用', resolution: '照辦法通過' },
+        { id: 'MO5', meetingId: 'MT1', no: '臨時一', subject: '年終聚餐日期與地點', proposer: '會長 王建宏', seconder: '',
+          explain: '', method: '', resolution: '12/20 中午於會館外燴，每人 500 元' },
+        { id: 'MO6', meetingId: 'MT2', no: '一', subject: '提請通過第三十屆第十一次理事會會議紀錄', proposer: '理事 蔡宜蓁', seconder: '副會長 李承翰', explain: '如附件一', method: '', resolution: '' },
+        { id: 'MO7', meetingId: 'MT2', no: '二', subject: '提請通過 12 月份財務收支審核案', proposer: '財務長 周書豪', seconder: '副會長 李承翰', explain: '如附件二', method: '', resolution: '' },
+        { id: 'MO8', meetingId: 'MT2', no: '三', subject: '提請通過次年度會員大會時間、地點討論案', proposer: '秘書長 陳怡君', seconder: '副會長 李承翰', explain: '依章程於每年 1 月召開', method: '1. 時間：1 月第三週（六）18:30\n2. 地點：龍井區公所 3 樓禮堂\n3. 經費：餐費由年度預算支應', resolution: '' },
+        { id: 'MO9', meetingId: 'MT3', no: '一', subject: '提請通過上年度決算與本年度預算案', proposer: '財務長 李承翰', seconder: '監事 許文彥', explain: '決算、預算表如附件', method: '', resolution: '無異議通過' },
+        { id: 'MO10', meetingId: 'MT3', no: '二', subject: '提請通過章程第 12 條會費修正案', proposer: '秘書長 王建宏', seconder: '理事 蔡宜蓁', explain: '基本會員年費調整為 14,000 元', method: '自次年度起適用', resolution: '出席 31 人，贊成 28 人，通過' },
+        { id: 'MO11', meetingId: 'MT4', no: '一', subject: '會長交接典禮各組工作內容請討論案', proposer: '', seconder: '', explain: '1. 接待組：負責接待友會會友、長官及來賓\n2. 攝影組：負責所有活動之照相攝影\n3. 佈置組：場地佈置、花籃擺設', method: '', resolution: '照說明後通過' }
       ],
       news: [
         nw('N1', '2027 年度會費繳交通知', '會務公告', '2027 年度會費每位 6,000 元，請於 12 月 31 日前繳交。\n\n轉帳：土地銀行龍井分行\n戶名：龍井國際青年商會\n\n也可在例會現場交給財務長。', '會員', true, -2),
@@ -601,6 +632,21 @@ window.Mock = (function () {
     return db.docs.filter(function (x) { return (x.status === '發布' || c.perms.newsManage) && audLevel(x.audience) <= c.level; })
       .map(docOut).sort(function (a, b) { return DOC_CATS.indexOf(a.category) - DOC_CATS.indexOf(b.category); });
   }
+  function meetingVisible(x, c) { return (x.status === '發布' || c.perms.meetingManage) && audLevel(x.audience) <= c.level; }
+  function motionsOf(id) { return db.motions.filter(function (m) { return m.meetingId === id; }).map(clone); }
+  function meetingOut(x, c, withMotions) {
+    var o = clone(x);
+    o.audienceLevel = audLevel(x.audience);
+    if (withMotions !== false) o.motions = motionsOf(x.id);
+    return o;
+  }
+  function visibleMeetings(c) {
+    return db.meetings.filter(function (x) { return meetingVisible(x, c); }).sort(function (a, b) { return (b.date || '').localeCompare(a.date || ''); });
+  }
+  function meetingsSummary(c) {
+    var list = visibleMeetings(c);
+    return { count: list.length, latest: list[0] ? meetingOut(list[0], c, false) : null };
+  }
   function membersById(id) {
     return db.members.filter(function (x) { return x.id === id; })[0];
   }
@@ -710,6 +756,7 @@ window.Mock = (function () {
         docs: visibleDocs(c),
         birthdays: c.perms.directory ? monthBirthdays() : [],
         polls: visiblePolls(c),
+        meetings: meetingsSummary(c),
         categories: { event: EVENT_CATS, news: NEWS_CATS, doc: DOC_CATS },
         catColors: { event: catColors('活動'), news: catColors('消息') },
         meetingCategories: MEETING_CATS,
@@ -971,6 +1018,68 @@ window.Mock = (function () {
     deleteDoc: function (c, d) {
       db.docs = db.docs.filter(function (x) { return x.id !== d.id; });
       return { id: d.id, deleted: true, docs: visibleDocs(c) };
+    },
+    meetings: function (c, d) {
+      var all = visibleMeetings(c);
+      var years = [];
+      all.forEach(function (x) { if (x.year && years.indexOf(x.year) < 0) years.push(x.year); });
+      years.sort(function (a, b) { return b - a; });
+      var want = String(d.year || '');
+      var year = want === 'all' ? 'all' : (years.indexOf(Number(want)) >= 0 ? Number(want) : (years[0] || 'all'));
+      return { years: years, year: year, total: all.length, canManage: !!c.perms.meetingManage, types: ['理事會', '理監事會', '監事會', '會員大會', '籌備會', '委員會', '其他'],
+        meetings: all.filter(function (x) { return year === 'all' || x.year === year; }).map(function (x) { return meetingOut(x, c); }) };
+    },
+    meeting: function (c, d) {
+      var x = db.meetings.filter(function (y) { return y.id === d.id; })[0];
+      if (!x || !meetingVisible(x, c)) throw err('NOT_FOUND', '找不到這場會議，可能已被刪除或你沒有權限查看');
+      return { meeting: meetingOut(x, c) };
+    },
+    saveMeeting: function (c, d) {
+      var x = d.meeting || {};
+      var title = String(x.title || '').trim();
+      if (!title) throw err('INVALID', '請填寫會議名稱，例如「第三十屆第十一次理事會」');
+      var year = Number(String(x.year || '').replace(/\D/g, '')) || 0;
+      if (year > 1911) year -= 1911;
+      if (!year && x.date) year = new Date(x.date).getFullYear() - 1911;
+      if (!year) throw err('INVALID', '請填寫年度（民國年，例如 115）或會議時間');
+      if (x.fileUrl && !/^https:\/\//.test(x.fileUrl)) throw err('INVALID', '檔案連結要以 https:// 開頭');
+      var aud = BY[x.audience] ? x.audience : '會員';
+      if (audLevel(aud) > c.level) aud = c.roleName;
+      var motions = (x.motions || []).filter(function (m) { return String(m.subject || '').trim(); });
+      if (motions.length > 60) throw err('INVALID', '一場會議最多 60 個議案');
+      var rec = { year: year, term: Number(x.term) || '', seq: Number(x.seq) || '', type: x.type || '理事會', title: title, date: x.date || '', location: x.location || '',
+        chair: x.chair || '', host: x.host || '', recorder: x.recorder || '', present: x.present || '', observers: x.observers || '', expected: x.expected || '', actual: x.actual || '',
+        note: x.note || '', fileUrl: x.fileUrl || '', fileName: x.fileName || '', audience: aud, status: x.status === '草稿' ? '草稿' : '發布', updatedAt: new Date().toISOString() };
+      var row;
+      if (x.id) {
+        row = db.meetings.filter(function (y) { return y.id === x.id; })[0];
+        if (!row || !meetingVisible(row, c)) throw err('NOT_FOUND', '找不到這場會議');
+        Object.assign(row, rec);
+      } else {
+        row = Object.assign({ id: 'MT' + uid4(), createdBy: c.member.name }, rec);
+        db.meetings.push(row);
+      }
+      var oldIds = {};
+      db.motions.filter(function (m) { return m.meetingId === row.id; }).forEach(function (m) { oldIds[m.id] = true; });
+      db.motions = db.motions.filter(function (m) { return m.meetingId !== row.id; });
+      motions.forEach(function (m, i) {
+        db.motions.push({ id: m.id && oldIds[m.id] ? m.id : 'MO' + uid4(), meetingId: row.id, no: String(m.no || '').trim(), subject: String(m.subject).trim(), proposer: m.proposer || '', seconder: m.seconder || '',
+          explain: m.explain || '', method: m.method || '', resolution: m.resolution || '', sort: i + 1 });
+      });
+      audit(c, x.id ? '修改會議紀錄' : '新增會議紀錄', title, motions.length + ' 個議案');
+      return { meeting: meetingOut(row, c) };
+    },
+    deleteMeeting: function (c, d) {
+      var row = db.meetings.filter(function (y) { return y.id === d.id; })[0];
+      if (!row || !meetingVisible(row, c)) throw err('NOT_FOUND', '找不到這場會議');
+      db.meetings = db.meetings.filter(function (y) { return y.id !== d.id; });
+      db.motions = db.motions.filter(function (m) { return m.meetingId !== d.id; });
+      return { id: d.id, deleted: true };
+    },
+    uploadMeetingFile: function (c, d) {
+      if (!/^(application\/pdf|image\/(jpeg|png)|application\/msword|application\/vnd\.openxmlformats-officedocument\.wordprocessingml\.document)$/.test(d.mime || '')) throw err('INVALID', '只能上傳 PDF、JPG、PNG 或 Word 檔');
+      if (!d.base64) throw err('INVALID', '沒有收到檔案內容');
+      return { url: 'https://drive.google.com/file/d/demo-upload-' + uid4() + '/view', name: d.name || '會議紀錄.pdf', shared: true, demo: true };
     },
     directory: function () {
       return db.members.filter(function (m) { return m.status !== '停用'; }).map(function (m) {
@@ -1301,7 +1410,8 @@ window.Mock = (function () {
     requests: 'memberManage', handleRequest: 'memberManage',
     prospects: 'viewRegs', officers: 'directory', handover: 'memberManage', saveHonor: 'memberManage', deleteHonor: 'memberManage', schedulePush: 'push', scheduledPushes: 'push', cancelScheduledPush: 'push',
     savePoll: 'newsManage', setPollStatus: 'newsManage', deletePoll: 'newsManage',
-    auditLog: 'memberManage', dues: 'duesManage', setDues: 'duesManage', exportAttendance: 'viewRegs' };
+    auditLog: 'memberManage', dues: 'duesManage', setDues: 'duesManage', exportAttendance: 'viewRegs',
+    saveMeeting: 'meetingManage', deleteMeeting: 'meetingManage', uploadMeetingFile: 'meetingManage' };
 
   var failQueue = [];
   function call(action, data) {
