@@ -917,6 +917,23 @@ input[type=radio], input[type=checkbox] { width: 20px; height: 20px; accent-colo
 .log.audit li > div:first-child span { white-space: normal; word-break: break-word; }
 
 /* ── 會議紀錄 ── */
+.crumbs { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; font-size: 13px; color: var(--muted); margin: -4px 0 10px; }
+.crumbs a { color: var(--harbor); }
+.crumbs a::after { content: '›'; color: var(--muted); margin: 0 2px 0 6px; }
+.crumbs span { color: var(--ink-2); font-weight: 600; }
+.mt-node { display: flex; align-items: center; gap: 12px; padding: 14px 12px 14px 14px; color: inherit; }
+.mt-node:active { background: #F7F9FB; }
+.mt-node .mtrow-main > b { font-size: 17px; }
+.mt-node .mtrow-meta { white-space: normal; display: block; line-height: 1.5; }
+.mt-node-ic { width: 26px; height: 26px; flex: none; color: var(--harbor); }
+.mt-node-year { flex: none; width: 54px; text-align: center; display: flex; flex-direction: column; color: var(--harbor-deep); }
+.mt-node-year b { font-family: var(--num); font-size: 24px; line-height: 1; font-weight: 700; }
+.mt-node-year span { font-size: 11px; color: var(--muted); margin-top: 3px; letter-spacing: .08em; }
+.mt-term { font-size: 12.5px; font-weight: 600; color: var(--muted); margin-left: 8px; }
+.mtrow-seq-no { flex: none; width: 46px; text-align: center; display: flex; flex-direction: column; align-items: center; color: var(--harbor-deep); }
+.mtrow-seq-no b { font-family: var(--num); font-size: 24px; line-height: 1; font-weight: 700; }
+.mtrow-seq-no span { font-size: 11px; color: var(--muted); margin-top: 3px; }
+.mtrow-seq .mtrow-main > b { font-size: 15.5px; }
 .mtrow { display: flex; align-items: center; gap: 12px; padding: 12px 12px 12px 10px; color: inherit; }
 .mtrow:active { background: #F7F9FB; }
 .mtrow-date { flex: none; width: 48px; text-align: center; display: flex; flex-direction: column; color: var(--harbor-deep); }
