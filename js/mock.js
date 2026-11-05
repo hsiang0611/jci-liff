@@ -190,7 +190,13 @@ window.Mock = (function () {
         { id: 'MT3', year: ROC - 1, term: 29, seq: 2, type: '會員大會', title: '第二十九屆第二次會員大會', date: at(-330, 18, 30), location: '龍井區公所 3 樓禮堂', chair: '會長 黃國明', host: '秘書長 王建宏', recorder: '秘書處',
           present: '', observers: '', expected: '38', actual: '31', note: '', fileUrl: 'https://drive.google.com/file/d/demo-ga-29/view', fileName: '', audience: '會員', status: '發布', createdBy: '王建宏', updatedAt: at(-320, 10) },
         { id: 'MT4', year: ROC, term: 30, seq: 1, type: '籌備會', title: '第三十一屆第一次會長交接典禮籌備會', date: at(-12, 20), location: '會館會議室', chair: '交接籌備會總幹事 蔡宜蓁', host: '秘書長 陳怡君', recorder: '秘書處',
-          present: '', observers: '', expected: '', actual: '', note: '', fileUrl: '', fileName: '', audience: '幹部', status: '草稿', createdBy: '陳怡君', updatedAt: at(-12, 22) }
+          present: '', observers: '', expected: '', actual: '', note: '', fileUrl: '', fileName: '', audience: '幹部', status: '草稿', createdBy: '陳怡君', updatedAt: at(-12, 22) },
+        { id: 'MT5', year: ROC, term: 30, seq: 10, type: '理事會', title: '第三十屆第十次理事會', date: at(-36, 20), location: '會館會議室', chair: '會長 王建宏', host: '秘書長 陳怡君', recorder: '秘書處',
+          present: '', observers: '', expected: '11', actual: '10', note: '', fileUrl: '', fileName: '', audience: '會員', status: '發布', createdBy: '陳怡君', updatedAt: at(-35, 10) },
+        { id: 'MT6', year: ROC - 1, term: 29, seq: 11, type: '理事會', title: '第二十九屆第十一次理事會', date: at(-370, 20), location: '會館會議室', chair: '會長 黃國明', host: '秘書長 王建宏', recorder: '秘書處',
+          present: '', observers: '', expected: '11', actual: '9', note: '', fileUrl: '', fileName: '', audience: '會員', status: '發布', createdBy: '王建宏', updatedAt: at(-369, 10) },
+        { id: 'MT7', year: ROC, term: 30, seq: 2, type: '監事會', title: '第三十屆第二次監事會', date: at(-40, 19, 30), location: '會館會議室', chair: '監事會召集人 許文彥', host: '', recorder: '秘書處',
+          present: '許文彥、楊淑芬、陳冠宇', observers: '財務長 周書豪', expected: '3', actual: '3', note: '', fileUrl: '', fileName: '', audience: '會員', status: '發布', createdBy: '陳怡君', updatedAt: at(-39, 10) }
       ],
       motions: [
         { id: 'MO1', meetingId: 'MT1', no: '一', subject: '提請通過參加鳳山兄弟會交接典禮時間、地點、經費討論案', proposer: '理事 蔡宜蓁', seconder: '副會長 李承翰',
@@ -208,7 +214,11 @@ window.Mock = (function () {
         { id: 'MO8', meetingId: 'MT2', no: '三', subject: '提請通過次年度會員大會時間、地點討論案', proposer: '秘書長 陳怡君', seconder: '副會長 李承翰', explain: '依章程於每年 1 月召開', method: '1. 時間：1 月第三週（六）18:30\n2. 地點：龍井區公所 3 樓禮堂\n3. 經費：餐費由年度預算支應', resolution: '' },
         { id: 'MO9', meetingId: 'MT3', no: '一', subject: '提請通過上年度決算與本年度預算案', proposer: '財務長 李承翰', seconder: '監事 許文彥', explain: '決算、預算表如附件', method: '', resolution: '無異議通過' },
         { id: 'MO10', meetingId: 'MT3', no: '二', subject: '提請通過章程第 12 條會費修正案', proposer: '秘書長 王建宏', seconder: '理事 蔡宜蓁', explain: '基本會員年費調整為 14,000 元', method: '自次年度起適用', resolution: '出席 31 人，贊成 28 人，通過' },
-        { id: 'MO11', meetingId: 'MT4', no: '一', subject: '會長交接典禮各組工作內容請討論案', proposer: '', seconder: '', explain: '1. 接待組：負責接待友會會友、長官及來賓\n2. 攝影組：負責所有活動之照相攝影\n3. 佈置組：場地佈置、花籃擺設', method: '', resolution: '照說明後通過' }
+        { id: 'MO11', meetingId: 'MT4', no: '一', subject: '會長交接典禮各組工作內容請討論案', proposer: '', seconder: '', explain: '1. 接待組：負責接待友會會友、長官及來賓\n2. 攝影組：負責所有活動之照相攝影\n3. 佈置組：場地佈置、花籃擺設', method: '', resolution: '照說明後通過' },
+        { id: 'MO12', meetingId: 'MT5', no: '一', subject: '提請通過「青商家庭中秋聯歡晚會」活動時間、地點、經費討論案', proposer: '理事 張雅婷', seconder: '副會長 李承翰', explain: '依年度計畫辦理', method: '1. 時間：9 月第二週（六）18:00\n2. 地點：會館\n3. 經費：由中秋晚會預算項下支應', resolution: '照說明及辦法通過' },
+        { id: 'MO13', meetingId: 'MT5', no: '二', subject: '提請通過 9 月份財務收支審核案', proposer: '財務長 周書豪', seconder: '副會長 李承翰', explain: '如附件', method: '', resolution: '照說明通過' },
+        { id: 'MO14', meetingId: 'MT6', no: '一', subject: '提請通過第三十屆理監事提名名單', proposer: '理事 王建宏', seconder: '副會長 蔡宜蓁', explain: '依章程由提名委員會提出', method: '提交會員大會選舉', resolution: '照辦法通過' },
+        { id: 'MO15', meetingId: 'MT7', no: '一', subject: '上半年度財務查核報告', proposer: '監事會召集人 許文彥', seconder: '', explain: '查核 1–6 月收支憑證', method: '', resolution: '帳目核對無誤，請財務長於理事會報告' }
       ],
       news: [
         nw('N1', '2027 年度會費繳交通知', '會務公告', '2027 年度會費每位 6,000 元，請於 12 月 31 日前繳交。\n\n轉帳：土地銀行龍井分行\n戶名：龍井國際青年商會\n\n也可在例會現場交給財務長。', '會員', true, -2),
@@ -1025,7 +1035,7 @@ window.Mock = (function () {
       all.forEach(function (x) { if (x.year && years.indexOf(x.year) < 0) years.push(x.year); });
       years.sort(function (a, b) { return b - a; });
       var want = String(d.year || '');
-      var year = want === 'all' ? 'all' : (years.indexOf(Number(want)) >= 0 ? Number(want) : (years[0] || 'all'));
+      var year = (!want || want === 'all') ? 'all' : (years.indexOf(Number(want)) >= 0 ? Number(want) : 'all');
       return { years: years, year: year, total: all.length, canManage: !!c.perms.meetingManage, types: ['理事會', '理監事會', '監事會', '會員大會', '籌備會', '委員會', '其他'],
         meetings: all.filter(function (x) { return year === 'all' || x.year === year; }).map(function (x) { return meetingOut(x, c); }) };
     },

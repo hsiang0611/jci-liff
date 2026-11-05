@@ -64,7 +64,7 @@
     evFilter: 'upcoming', newsCat: '', dirQuery: '', memQuery: '', memFilter: '',
     bindResult: null,
     push: null,
-    meetingsInfo: { count: 0, latest: null }, mtYear: '', mtQuery: '', mtType: '', mtDraft: null
+    meetingsInfo: { count: 0, latest: null }, mtQuery: '', mtDraft: null
   };
   /** 個人偏好（例如活動用列表或月曆），存在這支手機；讀不到就用預設值 */
   function pref(key, value) {
@@ -325,9 +325,14 @@
   var ROOTS = { home: 1, events: 1, news: 1, directory: 1, me: 1 };
 
   function route() {
-    var h = location.hash.replace(/^#\/?/, '');
+    var h = location.hash.replace(/^#\/?/, ''), q = {};
+    var qi = h.indexOf('?');
+    if (qi >= 0) {   // #/meeting-edit/new?type=理事會&year=115 → 預設值
+      h.slice(qi + 1).split('&').forEach(function (kv) { var p = kv.split('='); if (p[0]) q[decodeURIComponent(p[0])] = decodeURIComponent(p[1] || ''); });
+      h = h.slice(0, qi);
+    }
     var parts = h.split('/').map(function (x) { return decodeURIComponent(x || ''); });
-    return { name: parts[0] || 'home', a: parts[1] || '', b: parts[2] || '', path: h };
+    return { name: parts[0] || 'home', a: parts[1] || '', b: parts[2] || '', path: h, q: q };
   }
   function go(path, replace) {
     if (replace) {
@@ -920,14 +925,9 @@
   var MT_TYPES = ['理事會', '理監事會', '監事會', '會員大會', '籌備會', '委員會', '其他'];
   var MO_KEYS = ['no', 'subject', 'proposer', 'seconder', 'explain', 'method', 'resolution'];
 
-  function mtKey() { return 'meetings:' + (S.mtYear || 'latest'); }
+  function mtKey() { return 'meetings:all'; }
   function mtData() {
-    return ensure(mtKey(), function () {
-      return Api.call('meetings', S.mtYear ? { year: S.mtYear } : {}).then(function (d) {
-        if (d && d.year && !S.mtYear) S.cache['meetings:' + d.year] = d;   // 「最新年度」和那個年度本身是同一份
-        return d;
-      });
-    });
+    return ensure(mtKey(), function () { return Api.call('meetings', { year: 'all' }); });
   }
   function mtFind(id) {
     var keys = Object.keys(S.cache);
@@ -1037,50 +1037,124 @@
     if (n < 100) return d[Math.floor(n / 10)] + '十' + d[n % 10];
     return String(n);
   }
-  function mtBody(d) {
-    var toks = mtTokens();
-    var list = (d.meetings || []).filter(function (m) { return !S.mtType || m.type === S.mtType; });
-    if (toks.length) {
-      var hits = list.map(function (m) { return mtHit(m, toks); }).filter(Boolean);
-      var scope = S.mtYear === 'all' ? '' : '<p class="hint mt-scope">只搜尋 ' + esc(String(d.year)) + ' 年度　<button type="button" class="linkbtn" data-act="mtYear" data-v="all">搜尋全部年度</button></p>';
-      if (!hits.length) return empty('找不到「' + S.mtQuery.trim() + '」', '試試別的關鍵字，例如提案人、地點或經費項目。') + scope;
-      return '<p class="summary">找到 <b>' + hits.length + '</b> 場會議有相關內容</p>' + hits.join('') + scope;
-    }
-    if (!list.length) return empty(S.mtType ? '這個年度沒有' + S.mtType : '這個年度還沒有會議紀錄', perm('meetingManage') ? '按右上角「新增」把議程或紀錄放上來，會員就能在這裡查。' : '秘書處放上會議紀錄後會在這裡出現。');
-    var groups = [], by = {};
+  /** 類型 → 年度 → 第幾次 的階層（沒填的歸到「其他」「未定」） */
+  function mtTypeOf(m) { return m.type || '其他'; }
+  function mtYearOf(m) {
+    if (m.year) return m.year;
+    var t = tp(m.date);
+    return t ? t.y - 1911 : 0;
+  }
+  function mtTree(list) {
+    var types = {}, order = [];
     list.forEach(function (m) {
-      var t = tp(m.date);
-      var k = t ? t.y + '/' + t.m : (m.year ? m.year + ' 年度' : '未定');
-      if (!by[k]) { by[k] = { label: t ? t.m + ' 月' : k, items: [] }; groups.push(by[k]); }
-      by[k].items.push(m);
+      var ty = mtTypeOf(m), y = mtYearOf(m);
+      if (!types[ty]) { types[ty] = { type: ty, count: 0, years: {}, yearList: [], latest: null }; order.push(ty); }
+      var T = types[ty];
+      T.count++;
+      if (!T.latest || (m.date || '') > (T.latest.date || '')) T.latest = m;
+      if (!T.years[y]) { T.years[y] = { year: y, term: m.term || 0, count: 0, items: [] }; T.yearList.push(T.years[y]); }
+      var Y = T.years[y];
+      Y.count++; Y.items.push(m);
+      if (!Y.term && m.term) Y.term = m.term;
     });
-    return groups.map(function (g) {
-      return '<h3 class="month">' + esc(g.label) + '<small>' + g.items.length + ' 場</small></h3><div class="rows">' + g.items.map(function (m) { return mtRow(m, []); }).join('') + '</div>';
-    }).join('');
+    order.sort(function (a, b) {
+      var ia = MT_TYPES.indexOf(a), ib = MT_TYPES.indexOf(b);
+      if (ia < 0) ia = 99; if (ib < 0) ib = 99;
+      return (ia - ib) || a.localeCompare(b, 'zh-Hant');
+    });
+    order.forEach(function (ty) {
+      var T = types[ty];
+      T.yearList.sort(function (a, b) { return b.year - a.year; });
+      T.yearList.forEach(function (Y) {
+        Y.items.sort(function (a, b) {
+          if (a.seq && b.seq && a.seq !== b.seq) return a.seq - b.seq;
+          if (a.seq && !b.seq) return -1;
+          if (!a.seq && b.seq) return 1;
+          return (a.date || '').localeCompare(b.date || '');
+        });
+      });
+    });
+    return { types: types, order: order };
+  }
+  function yearLabel(y) { return y ? y + ' 年度' : '未定年度'; }
+  function seqLabel(m) { return m.seq ? '第' + cnOf(m.seq) + '次' : ''; }
+  function mtLevelPath(m) { return 'meetings/' + encodeURIComponent(mtTypeOf(m)) + '/' + (mtYearOf(m) || 0); }
+
+  function mtSearchBody(list, scopeLabel) {
+    var toks = mtTokens();
+    var hits = list.map(function (m) { return mtHit(m, toks); }).filter(Boolean);
+    var scope = scopeLabel ? '<p class="hint mt-scope">只搜尋' + esc(scopeLabel) + '　<a href="#/meetings" data-nav class="linkbtn">搜尋全部會議</a></p>' : '';
+    if (!hits.length) return empty('找不到「' + S.mtQuery.trim() + '」', '試試別的關鍵字，例如提案人、地點或經費項目。') + scope;
+    return '<p class="summary">找到 <b>' + hits.length + '</b> 場會議有相關內容</p>' + hits.join('') + scope;
+  }
+  /** 第三層：某類型某年度的會議，依第幾次排 */
+  function mtSeqRows(items) {
+    return '<div class="rows">' + items.map(function (m) {
+      var t = tp(m.date);
+      var n = Array.isArray(m.motions) ? m.motions.length : -1;
+      var st = mtStage(m);
+      return '<a class="mtrow mtrow-seq" href="#/meeting/' + encodeURIComponent(m.id) + '" data-nav>' +
+        '<div class="mtrow-seq-no">' + (m.seq ? '<b>' + m.seq + '</b><span>次</span>' : '<b>—</b>') + '</div>' +
+        '<div class="mtrow-main"><b>' + esc(m.title) + (m.status === '草稿' ? '<span class="tag">草稿</span>' : '') + '</b>' +
+        '<span class="mtrow-meta">' + [t ? t.m + '/' + t.d + '（' + WD[t.w] + '）' : '', n > 0 ? n + ' 個議案' : n === 0 ? '沒有議案' : '', m.location || ''].filter(Boolean).join('　') + (m.fileUrl ? '　' + icon('doc', 'ic-sm') + '附件' : '') + '</span></div>' +
+        (st ? '<span class="pill ' + st.c + '">' + st.t + '</span>' : '') + icon('next', 'chev') + '</a>';
+    }).join('') + '</div>';
+  }
+  function mtBody(d, r) {
+    var list = d.meetings || [];
+    var tree = mtTree(list);
+    var type = r.a || '';
+    var year = r.b !== '' ? Number(r.b) : null;
+    var T = type ? tree.types[type] : null;
+    if (mtTokens().length) {
+      var scoped = list.filter(function (m) { return (!type || mtTypeOf(m) === type) && (year === null || mtYearOf(m) === year); });
+      return mtSearchBody(scoped, type ? type + (year !== null ? ' ' + yearLabel(year) : '') : '');
+    }
+    if (!list.length) return empty('還沒有會議紀錄', perm('meetingManage') ? '按右上角「新增」把議程或紀錄放上來，會員就能在這裡查。' : '秘書處放上會議紀錄後會在這裡出現。');
+    if (!type) {
+      // 第一層：會議類型
+      return '<div class="rows mt-tree">' + tree.order.map(function (ty) {
+        var X = tree.types[ty];
+        var ys = X.yearList.map(function (Y) { return Y.year; }).filter(Boolean);
+        var span = ys.length > 1 ? ys[ys.length - 1] + '–' + ys[0] + ' 年度' : ys.length ? ys[0] + ' 年度' : '';
+        return '<a class="mt-node" href="#/meetings/' + encodeURIComponent(ty) + '" data-nav>' + icon('minutes', 'mt-node-ic') +
+          '<div class="mtrow-main"><b>' + esc(ty) + '</b><span class="mtrow-meta">' + X.count + ' 場' + (span ? '　' + span : '') + (X.latest ? '　最近：' + esc(X.latest.title) : '') + '</span></div>' + icon('next', 'chev') + '</a>';
+      }).join('') + '</div>';
+    }
+    if (!T) return empty('沒有「' + type + '」的會議', '', '<a class="btn btn-ghost" href="#/meetings" data-nav>回會議類型</a>');
+    if (year === null) {
+      // 第二層：年度
+      return '<div class="rows mt-tree">' + T.yearList.map(function (Y) {
+        var decided = Y.items.filter(function (m) { return Array.isArray(m.motions) && m.motions.some(function (x) { return x.resolution; }); }).length;
+        return '<a class="mt-node" href="#/meetings/' + encodeURIComponent(type) + '/' + (Y.year || 0) + '" data-nav>' +
+          '<div class="mt-node-year"><b>' + (Y.year || '—') + '</b><span>年度</span></div>' +
+          '<div class="mtrow-main"><b>' + yearLabel(Y.year) + (Y.term ? '<small class="mt-term">第 ' + Y.term + ' 屆</small>' : '') + '</b>' +
+          '<span class="mtrow-meta">' + Y.count + ' 場' + (decided < Y.count ? '　' + (Y.count - decided) + ' 場尚未填決議' : '　決議都已登錄') + '</span></div>' + icon('next', 'chev') + '</a>';
+      }).join('') + '</div>';
+    }
+    var Y = T.years[year];
+    if (!Y) return empty(type + '在 ' + yearLabel(year) + '沒有會議', '', '<a class="btn btn-ghost" href="#/meetings/' + encodeURIComponent(type) + '" data-nav>回年度列表</a>');
+    // 第三層：第幾次
+    return mtSeqRows(Y.items);
   }
 
-  function viewMeetings() {
+  function viewMeetings(r) {
     var d = mtData();
-    var add = perm('meetingManage') ? '<button type="button" class="btn btn-small" data-go="meeting-edit/new">' + icon('plus') + '新增</button>' : '';
-    var html = topbar({ back: 'me', title: '會議紀錄', actions: add }) + '<main class="view">';
+    var type = r.a || '';
+    var year = r.b !== '' ? Number(r.b) : null;
+    var title = !type ? '會議紀錄' : year === null ? type : type + '　' + yearLabel(year);
+    var back = !type ? 'me' : year === null ? 'meetings' : 'meetings/' + encodeURIComponent(type);
+    var add = perm('meetingManage') ? '<button type="button" class="btn btn-small" data-go="meeting-edit/new' + (type ? '?type=' + encodeURIComponent(type) + (year ? '&year=' + year : '') : '') + '">' + icon('plus') + '新增</button>' : '';
+    var html = topbar({ back: back, title: title, actions: add }) + '<main class="view">';
     if (!d) return html + skeleton(5) + '</main>';
     if (d.__error) return html + errorBlock(d.__error) + '</main>';
     if (!d.total && !perm('meetingManage')) return html + empty('還沒有會議紀錄', '秘書處放上理事會、會員大會的議程與決議後，會員可以在這裡搜尋。') + '</main>';
-    html += '<div class="search">' + icon('search') + '<input type="search" data-filter="mt" placeholder="搜尋案由、決議、提案人、地點" value="' + esc(S.mtQuery || '') + '" aria-label="搜尋會議紀錄"></div>';
-    var years = (d.years || []).slice();
-    if (years.length > 1 || S.mtYear === 'all') {
-      html += '<div class="chips" role="tablist" aria-label="年度">' + years.map(function (y) {
-        return '<button type="button" role="tab" aria-selected="' + (d.year === y && S.mtYear !== 'all') + '" data-act="mtYear" data-v="' + y + '">' + y + ' 年度</button>';
-      }).join('') + '<button type="button" role="tab" aria-selected="' + (S.mtYear === 'all') + '" data-act="mtYear" data-v="all">全部</button></div>';
+    if (type) {
+      html += '<nav class="crumbs" aria-label="位置"><a href="#/meetings" data-nav>會議紀錄</a>' +
+        (year !== null ? '<a href="#/meetings/' + encodeURIComponent(type) + '" data-nav>' + esc(type) + '</a><span>' + esc(yearLabel(year)) + '</span>' : '<span>' + esc(type) + '</span>') + '</nav>';
     }
-    var types = [];
-    (d.meetings || []).forEach(function (m) { if (m.type && types.indexOf(m.type) < 0) types.push(m.type); });
-    if (types.length > 1) {
-      html += '<div class="chips" role="tablist" aria-label="會議類型"><button type="button" role="tab" aria-selected="' + (!S.mtType) + '" data-act="mtType" data-v="">全部類型</button>' + types.map(function (c) {
-        return '<button type="button" role="tab" aria-selected="' + (S.mtType === c) + '" data-act="mtType" data-v="' + esc(c) + '">' + esc(c) + '</button>';
-      }).join('') + '</div>';
-    }
-    html += '<div id="mt-list">' + mtBody(d) + '</div>';
+    html += '<div class="search">' + icon('search') + '<input type="search" data-filter="mt" placeholder="' + (type ? '搜尋' + esc(type) + (year !== null ? ' ' + yearLabel(year) : '') + '的案由、決議' : '搜尋所有會議的案由、決議、提案人') + '" value="' + esc(S.mtQuery || '') + '" aria-label="搜尋會議紀錄"></div>';
+    html += '<div id="mt-list">' + mtBody(d, r) + '</div>';
     if (perm('meetingManage') && !d.total) html += '<p class="hint">也可以直接在試算表的「會議」「議案」工作表維護，App 會同步顯示。</p>';
     return html + '</main>';
   }
@@ -1107,7 +1181,7 @@
       }
       m = one.meeting;
     }
-    var html = topbar({ back: 'meetings', title: m.type || '會議紀錄' }) + '<main class="view view-detail">';
+    var html = topbar({ back: mtLevelPath(m), title: (m.type || '會議紀錄') + (mtYearOf(m) ? '　' + yearLabel(mtYearOf(m)) : '') }) + '<main class="view view-detail">';
     var st = mtStage(m) || { t: m.type || '會議', c: 'is-muted' };
     html += '<div class="detail-head"><span class="pill ' + st.c + '">' + st.t + '</span>' + (mtSub(m) ? '<span class="mt-headsub">' + esc(mtSub(m)) + '</span>' : '') +
       '<h1>' + esc(m.title) + '</h1>' +
@@ -1140,12 +1214,27 @@
   /* ── 編輯 ── */
 
   function blankMotion() { return { id: '', no: '', subject: '', proposer: '', seconder: '', explain: '', method: '', resolution: '' }; }
+  function mtPristine(d) {
+    return !d.title && !d.date && !d.fileUrl && !d.present && (d.motions || []).every(function (x) { return !x.subject && !x.explain && !x.method && !x.resolution; });
+  }
   function mtDraftFor(r) {
-    if (S.mtDraft && S.mtDraft.__for === r.a) return S.mtDraft;
+    if (S.mtDraft && S.mtDraft.__for === r.a) {
+      // 從某個類型／年度按「新增」進來、而草稿還沒打任何字：改用那個類型／年度當預設
+      var q = r.q || {}, cur = S.mtDraft;
+      var wantType = q.type || cur.type, wantYear = Number(q.year) || cur.year;
+      if (r.a !== 'new' || !(q.type || q.year) || (wantType === cur.type && wantYear === cur.year) || !mtPristine(cur)) return cur;
+    }
     var d;
     if (r.a === 'new') {
-      d = { id: '', year: new Date().getFullYear() - 1911, term: '', seq: '', type: '理事會', title: '', date: '', location: '', chair: '', host: '', recorder: '秘書處',
+      var preset = r.q || {};
+      d = { id: '', year: Number(preset.year) || new Date().getFullYear() - 1911, term: '', seq: '', type: preset.type || '理事會', title: '', date: '', location: '', chair: '', host: '', recorder: '秘書處',
         present: '', observers: '', expected: '', actual: '', note: '', fileUrl: '', fileName: '', audience: '會員', status: '發布', motions: [blankMotion()] };
+      // 同類型同年度已有會議時，次別預設接下去、屆別沿用
+      var all = S.cache[mtKey()];
+      if (all && all.meetings) {
+        var same = all.meetings.filter(function (m) { return mtTypeOf(m) === d.type && mtYearOf(m) === d.year; });
+        if (same.length) { d.seq = Math.max.apply(null, same.map(function (m) { return m.seq || 0; })) + 1; d.term = same[0].term || ''; }
+      }
     } else {
       var m = mtFind(r.a);
       if (!m) return null;
@@ -3092,8 +3181,6 @@
         });
       }).catch(fail);
     },
-    mtYear: function (el) { S.mtYear = el.getAttribute('data-v') === 'all' ? 'all' : Number(el.getAttribute('data-v')) || ''; render(); },
-    mtType: function (el) { S.mtType = el.getAttribute('data-v') || ''; render(); },
     mtParse: function (el) {
       var form = el.closest('form'), ta = document.getElementById('mt-paste');
       var text = ta ? ta.value : '';
@@ -4089,7 +4176,7 @@
     if (f === 'mt') {
       S.mtQuery = t.value;
       var ml = document.getElementById('mt-list'), md = S.cache[mtKey()];
-      if (ml && md && !md.__error) ml.innerHTML = mtBody(md);
+      if (ml && md && !md.__error) ml.innerHTML = mtBody(md, route());
       return;
     }
     if (f === 'audit') {
