@@ -916,6 +916,76 @@ input[type=radio], input[type=checkbox] { width: 20px; height: 20px; accent-colo
 /* ── 操作紀錄 ── */
 .log.audit li > div:first-child span { white-space: normal; word-break: break-word; }
 
+/* ── 會議紀錄 ── */
+.mtrow { display: flex; align-items: center; gap: 12px; padding: 12px 12px 12px 10px; color: inherit; }
+.mtrow:active { background: #F7F9FB; }
+.mtrow-date { flex: none; width: 48px; text-align: center; display: flex; flex-direction: column; color: var(--harbor-deep); }
+.mtrow-date b { font-family: var(--num); font-size: 20px; line-height: 1.05; font-weight: 700; letter-spacing: .01em; }
+.mtrow-date span { font-size: 12px; color: var(--muted); margin-top: 3px; }
+.mtrow-date.is-sat { color: #17794F; }
+.mtrow-date.is-sun { color: #C62828; }
+.mtrow-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.mtrow-main > b { font-size: 16px; font-weight: 600; line-height: 1.4; }
+.mtrow-sub { font-size: 12.5px; color: var(--harbor); font-weight: 600; letter-spacing: .03em; }
+.mtrow-meta { font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 2px; }
+.mtrow .pill { flex: none; }
+.ic-sm { width: 14px; height: 14px; }
+mark { background: #FFF1B8; color: inherit; padding: 0 1px; border-radius: 2px; }
+.mt-hit { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); margin-bottom: 12px; overflow: hidden; }
+.mt-hit-head { display: flex; align-items: center; gap: 10px; padding: 12px 14px; color: inherit; background: var(--tide); }
+.mt-hit-head b { font-size: 15.5px; flex: 1; min-width: 0; line-height: 1.4; }
+.mt-hit-head span { font-size: 12.5px; color: var(--ink-2); flex: none; max-width: 42%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mt-hit-mo { display: block; padding: 12px 14px; color: inherit; border-top: 1px solid var(--line); }
+.mt-hit-mo:active { background: #F7F9FB; }
+.mt-hit-mo > b { display: block; font-size: 15.5px; font-weight: 600; line-height: 1.5; }
+.mt-no { display: inline-block; font-size: 12.5px; font-weight: 700; color: var(--harbor); background: var(--tide); border-radius: 4px; padding: 0 6px; margin-right: 6px; vertical-align: 1px; white-space: nowrap; }
+.mt-snip, .mt-res { font-size: 14px; color: var(--ink-2); margin-top: 6px; line-height: 1.6; }
+.mt-snip span, .mt-res span { display: inline-block; font-size: 12px; font-weight: 700; color: var(--muted); margin-right: 6px; }
+.mt-res.is-ok { color: var(--ok); }
+.mt-res.is-ok span { color: var(--ok); }
+.mt-res.is-muted { color: var(--muted); }
+.mt-scope { margin-top: 12px; }
+.mt-headsub { display: inline-block; margin-left: 8px; font-size: 13.5px; color: var(--ink-2); font-weight: 600; }
+.mt-people { margin: 0 0 14px; font-size: 14px; color: var(--ink-2); background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 0 14px; }
+.mt-people summary { padding: 11px 0; cursor: pointer; font-weight: 600; color: var(--ink); }
+.mt-people p { margin: 0 0 12px; line-height: 1.7; }
+.mt-people p b { display: inline-block; font-size: 12.5px; color: var(--muted); margin-right: 8px; }
+.mt-file { margin-bottom: 18px; justify-content: flex-start; text-align: left; white-space: normal; height: auto; min-height: 48px; padding: 10px 16px; line-height: 1.4; word-break: break-all; }
+.mt-file .ic { flex: none; }
+.mt-file .ic { color: var(--harbor); }
+.motion { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 14px 16px; margin-bottom: 12px; scroll-margin-top: 78px; }
+.motion h3 { font-size: 16.5px; font-weight: 700; line-height: 1.55; }
+.motion h3 .mt-no { vertical-align: 2px; }
+.mo-who { font-size: 13.5px; color: var(--muted); margin: 6px 0 0; }
+.mo-sec { margin-top: 12px; }
+.mo-sec h4, .mo-res h4 { font-size: 13px; font-weight: 700; color: var(--muted); letter-spacing: .06em; margin-bottom: 2px; }
+.mo-sec .prose, .mo-res .prose { font-size: 15px; line-height: 1.75; margin-bottom: 0; }
+.mo-res { margin-top: 12px; padding: 10px 12px; border-radius: var(--r-sm); }
+.mo-res.is-ok { background: var(--ok-soft); }
+.mo-res.is-ok h4, .mo-res.is-ok .prose { color: var(--ok); }
+.mo-res.is-muted { background: var(--paper); border: 1px dashed var(--line); }
+.mo-res.is-muted p { color: var(--muted); font-size: 14px; }
+.motion.is-target { animation: target-flash 1.8s ease-out; border-color: var(--harbor); }
+@keyframes target-flash { 0%, 40% { box-shadow: 0 0 0 4px rgba(5, 103, 177, .25); } 100% { box-shadow: none; } }
+.motion-edit { border: 1px solid var(--line); border-radius: var(--r); padding: 12px 14px 14px; margin: 0 0 12px; background: var(--surface); display: grid; gap: 12px; }
+.mo-edit-head { display: flex; align-items: center; justify-content: space-between; }
+.mo-edit-head legend { font-size: 14px; font-weight: 700; color: var(--harbor-deep); padding: 0; float: left; }
+.mo-tools { display: flex; gap: 2px; }
+.mo-tools .iconbtn:disabled { opacity: .3; }
+.mo-tools .iconbtn.is-danger { color: var(--danger); }
+.mo-row { grid-template-columns: 5.5em 1fr; }
+.field-row.three { grid-template-columns: 1fr 1fr 1fr; }
+.paste { margin-bottom: 18px; background: var(--tide); border-radius: var(--r); padding: 0 14px; }
+.paste summary { display: flex; align-items: center; gap: 8px; padding: 12px 0; font-weight: 600; cursor: pointer; color: var(--harbor-deep); list-style: none; }
+.paste summary::-webkit-details-marker { display: none; }
+.paste textarea { width: 100%; margin: 6px 0 10px; }
+.paste .btn { margin-bottom: 14px; }
+.paste .hint { margin: -4px 0 8px; }
+.mt-filebox { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-sm); margin-bottom: 8px; }
+.mt-filebox a { display: inline-flex; align-items: center; gap: 6px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--harbor); }
+.mt-filebox .linkbtn { padding: 0; }
+input[type=file] { font-size: 14px; }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
