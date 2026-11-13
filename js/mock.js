@@ -262,17 +262,33 @@ window.Mock = (function () {
     });
     // 會費：今年部分已繳
     var cy = new Date().getFullYear();
-    db.duesRules = [
-      { role: '會長', amount: 6000, desc: '轉帳：土地銀行龍井分行 012-345-678901，戶名：龍井國際青年商會。轉帳後請告知財務長末五碼。' }
-    ].concat(['秘書長', '管理員', '財務長', '副會長', '理事', '監事', '法制顧問', '幹部', '會員'].map(function (r) { return { role: r, amount: 6000, desc: '' }; }), [
-      { role: '特友', amount: 3000, desc: '' }
-    ]);
+    // 會費收取標準（116 年度明細）：一種身分一列，項目 → 金額
+    var I = function (cls, a, note) { return { year: 116, cls: cls, items: a, note: note || '' }; };
+    db.duesItems = ['會費', '會館基金', '長發基金', '喜慶基金', '理監事自律公約金', '新會員入會費', '見習費', '理監事基金', '中區全國年會', '製作名片', 'OB聯誼基金'];
+    db.duesStd = [
+      I('會長', { '會費': 14000, '長發基金': 500, '喜慶基金': 2000, '理監事自律公約金': 3000, '理監事基金': 26000, '中區全國年會': 2200, '製作名片': 400 }),
+      I('副會長', { '會費': 14000, '長發基金': 500, '喜慶基金': 2000, '理監事自律公約金': 3000, '理監事基金': 8000, '中區全國年會': 2200, '製作名片': 400 }),
+      I('常務監事', { '會費': 14000, '長發基金': 500, '喜慶基金': 2000, '理監事自律公約金': 3000, '理監事基金': 8000, '中區全國年會': 2200, '製作名片': 400 }),
+      I('常務監事OB會兄', { '會費': 11000, '長發基金': 500, '喜慶基金': 2000, '理監事自律公約金': 3000, '理監事基金': 8000, '中區全國年會': 2200, '製作名片': 400, 'OB聯誼基金': 3000 }),
+      I('理事', { '會費': 14000, '長發基金': 500, '喜慶基金': 2000, '理監事自律公約金': 3000, '理監事基金': 3000, '中區全國年會': 2200, '製作名片': 400 }),
+      I('理事OB會兄', { '會費': 11000, '長發基金': 500, '喜慶基金': 2000, '理監事自律公約金': 3000, '理監事基金': 3000, '中區全國年會': 2200, '製作名片': 400, 'OB聯誼基金': 3000 }),
+      I('監事', { '會費': 14000, '長發基金': 500, '喜慶基金': 2000, '理監事自律公約金': 3000, '理監事基金': 3000, '中區全國年會': 2200, '製作名片': 400 }),
+      I('會友', { '會費': 14000, '長發基金': 500, '喜慶基金': 2000 }),
+      I('新會友', { '會費': 14000, '會館基金': 5000, '長發基金': 500, '喜慶基金': 2000, '新會員入會費': 2000 }),
+      I('青商二代', { '會費': 14000, '長發基金': 500, '喜慶基金': 1000 }),
+      I('見習會友', { '見習費': 3000 }, '青商二代免收'),
+      I('OB主席', { '會費': 7000, '喜慶基金': 2000, 'OB聯誼基金': 13000 }),
+      I('OB會友', { '會費': 7000, '喜慶基金': 2000, 'OB聯誼基金': 3000 })
+    ];
+    db.duesDesc = '轉帳：土地銀行龍井分行 012-345-678901，戶名：龍井國際青年商會。轉帳後請告知財務長末五碼。';
+    db.members.filter(function (x) { return x.id === 'M011'; })[0].duesClass = 'OB主席';   // 許文彥：特友，但擔任 OB 主席
+    db.members.filter(function (x) { return x.id === 'M010'; })[0].duesClass = '青商二代';
     db.dues = [
-      { year: cy, memberId: 'M001', name: '王建宏', amount: 6000, paidAt: at(-260, 10), method: '轉帳', note: '', recordedBy: '周書豪' },
-      { year: cy, memberId: 'M002', name: '陳怡君', amount: 6000, paidAt: at(-255, 10), method: '轉帳', note: '', recordedBy: '周書豪' },
-      { year: cy, memberId: 'M003', name: '李承翰', amount: 6000, paidAt: at(-250, 10), method: '現金', note: '例會現場', recordedBy: '周書豪' },
-      { year: cy, memberId: 'M006', name: '吳佩珊', amount: 6000, paidAt: at(-200, 10), method: '轉帳', note: '', recordedBy: '周書豪' },
-      { year: cy, memberId: 'M007', name: '黃國明', amount: 3000, paidAt: at(-240, 10), method: '現金', note: '', recordedBy: '周書豪' }
+      { year: cy, memberId: 'M001', name: '王建宏', amount: 48100, paidAt: at(-260, 10), method: '轉帳', note: '', recordedBy: '周書豪' },
+      { year: cy, memberId: 'M002', name: '陳怡君', amount: 16500, paidAt: at(-255, 10), method: '轉帳', note: '', recordedBy: '周書豪' },
+      { year: cy, memberId: 'M003', name: '李承翰', amount: 30100, paidAt: at(-250, 10), method: '現金', note: '例會現場', recordedBy: '周書豪' },
+      { year: cy, memberId: 'M006', name: '吳佩珊', amount: 16500, paidAt: at(-200, 10), method: '轉帳', note: '', recordedBy: '周書豪' },
+      { year: cy, memberId: 'M007', name: '黃國明', amount: 12000, paidAt: at(-240, 10), method: '現金', note: '', recordedBy: '周書豪' }
     ];
     db.audit = [
       { time: at(-3, 21, 40), actor: '陳怡君', action: '修改會員', target: '吳佩珊（M006）', detail: '職稱 （空白） → 公關主委' },
@@ -300,31 +316,74 @@ window.Mock = (function () {
   function audit(c, action, target, detail) {
     db.audit.push({ time: new Date().toISOString(), actor: c.member ? c.member.name : c.lineName, action: action, target: target, detail: detail || '' });
   }
-  function duesRule(role) { return db.duesRules.filter(function (r) { return r.role === role; })[0] || null; }
-  function duesNote() { var r = db.duesRules.filter(function (x) { return x.desc; })[0]; return r ? r.desc : ''; }
+  var ROLE_TO_CLS = { '會長': '會長', '副會長': '副會長', '理事': '理事', '監事': '監事', '會員': '會友', '預備會員': '見習會友', '特友': 'OB會友' };
+  function duesRules(year) {
+    var roc = year - 1911;
+    var pick = db.duesStd.filter(function (r) { return r.year === roc; });
+    var label = roc + ' 年度', borrowed = false;
+    if (!pick.length) { pick = db.duesStd.filter(function (r) { return !r.year; }); label = ''; }
+    if (!pick.length && db.duesStd.length) {
+      var ys = []; db.duesStd.forEach(function (r) { if (r.year && ys.indexOf(r.year) < 0) ys.push(r.year); }); ys.sort(function (a, b) { return a - b; });
+      var from = ys.filter(function (y) { return y <= roc; }).pop() || ys[0];
+      pick = db.duesStd.filter(function (r) { return r.year === from; }); borrowed = true; label = '沿用 ' + from + ' 年度標準';
+    }
+    var by = {};
+    pick.forEach(function (r) {
+      var items = Object.keys(r.items).map(function (k) { return { name: k, amount: r.items[k] }; });
+      if (!by[r.cls]) by[r.cls] = { cls: r.cls, items: items, total: items.reduce(function (a, x) { return a + x.amount; }, 0), note: r.note };
+    });
+    return { byClass: by, list: Object.keys(by).map(function (k) { return by[k]; }), label: label, borrowed: borrowed, any: db.duesStd.length > 0 };
+  }
+  var HOW = { set: '會員資料設定', title: '依職稱', join: '入會年度', role: '依角色推定', default: '預設會友' };
+  function duesClassOf(m, rules, year) {
+    var by = rules.byClass;
+    if (m.duesClass) return { cls: m.duesClass, how: 'set', rule: by[m.duesClass] || null };
+    if (!rules.any) return null;
+    if (m.title && by[m.title]) return { cls: m.title, how: 'title', rule: by[m.title] };
+    var jy = Number(m.joinYear) || 0; if (jy && jy < 1911) jy += 1911;
+    if (jy === year && by['新會友'] && (!m.role || m.role === '會員')) return { cls: '新會友', how: 'join', rule: by['新會友'] };
+    var mapped = ROLE_TO_CLS[m.role];
+    if (mapped && by[mapped]) return { cls: mapped, how: 'role', rule: by[mapped] };
+    if (m.role && by[m.role]) return { cls: m.role, how: 'role', rule: by[m.role] };
+    if (mapped || !m.role) return null;
+    if (by['會友']) return { cls: '會友', how: 'default', rule: by['會友'] };
+    return null;
+  }
   function duesRec(year, id) { return db.dues.filter(function (r) { return r.year === year && r.memberId === id; })[0] || null; }
   function paidOut(r) { return r ? { amount: r.amount, paidAt: r.paidAt, method: r.method, note: r.note, recordedBy: r.recordedBy } : null; }
   function memberDues(m) {
     var cy = new Date().getFullYear(), years = [cy], out = [];
     if (new Date().getMonth() + 1 >= 10) years.push(cy + 1);
     years.forEach(function (y) {
-      var rule = duesRule(m.role), rec = duesRec(y, m.id);
-      if (!rule && !rec) return;
-      out.push({ year: y, required: !!rule, amount: rule ? rule.amount : null, desc: (rule && rule.desc) || duesNote(), paid: paidOut(rec) });
+      var rules = duesRules(y), c = duesClassOf(m, rules, y), rec = duesRec(y, m.id);
+      if (!c && !rec) return;
+      var rule = c ? c.rule : null;
+      out.push({ year: y, roc: y - 1911, required: !!(rule && rule.total), amount: rule ? rule.total : null, cls: c ? c.cls : '', how: c ? c.how : '', howLabel: c ? HOW[c.how] : '',
+        unknownClass: !!(c && !rule), items: rule ? rule.items : [], note: rule ? rule.note : '', standardLabel: rules.label, borrowed: rules.borrowed, desc: db.duesDesc, paid: paidOut(rec) });
     });
     return out;
   }
   function duesList(c, year) {
-    var members = db.members.filter(function (m) { return duesRec(year, m.id) || (m.status !== '停用' && duesRule(m.role)); }).map(function (m) {
-      var rule = duesRule(m.role);
+    var rules = duesRules(year);
+    var members = db.members.filter(function (m) {
+      if (duesRec(year, m.id)) return true;
+      if (m.status === '停用') return false;
+      var x = duesClassOf(m, rules, year); return !!(x && x.rule && x.rule.total);
+    }).map(function (m) {
+      var x = duesClassOf(m, rules, year), rule = x ? x.rule : null;
       return { id: m.id, name: m.name, role: m.role, title: m.title, level: (BY[m.role] || {}).level || 0, bound: !!m.lineUid, active: m.status !== '停用',
-        required: !!rule && m.status !== '停用', amount: rule ? rule.amount : null, paid: paidOut(duesRec(year, m.id)) };
+        cls: x ? x.cls : '', how: x ? x.how : '', howLabel: x ? HOW[x.how] : '', unknownClass: !!(x && !rule),
+        required: !!(rule && rule.total) && m.status !== '停用', amount: rule ? rule.total : null, items: rule ? rule.items : [], paid: paidOut(duesRec(year, m.id)) };
     });
     var req = members.filter(function (m) { return m.required; });
     var collected = members.reduce(function (s, m) { return s + (m.paid && m.paid.amount ? m.paid.amount : 0); }, 0);
+    var expected = req.reduce(function (s, m) { return s + (m.amount || 0); }, 0);
     var cy = new Date().getFullYear();
-    return { year: year, years: [cy - 1, cy, cy + 1], rules: clone(db.duesRules), note: duesNote(), members: members,
-      totals: { required: req.length, paid: req.filter(function (m) { return m.paid; }).length, unpaid: req.filter(function (m) { return !m.paid; }).length, collected: collected } };
+    var itemNames = [];
+    rules.list.forEach(function (r) { r.items.forEach(function (x) { if (itemNames.indexOf(x.name) < 0) itemNames.push(x.name); }); });
+    return { year: year, roc: year - 1911, years: [cy - 1, cy, cy + 1], standards: rules.list, itemNames: itemNames, standardLabel: rules.label, borrowed: rules.borrowed, hasStandards: rules.any,
+      classes: db.duesStd.map(function (r) { return r.cls; }), note: db.duesDesc, members: members,
+      totals: { required: req.length, paid: req.filter(function (m) { return m.paid; }).length, unpaid: req.filter(function (m) { return !m.paid; }).length, collected: collected, expected: expected } };
   }
   function shop(id, name, intro, address, hours, offer, url) {
     var mem = db.members.filter(function (x) { return x.id === id; })[0];
@@ -698,7 +757,8 @@ window.Mock = (function () {
     }
     if (mode === 'duesUnpaid') {
       var yr = Number(aud.year) || new Date().getFullYear();
-      db.members.forEach(function (m) { if (m.status !== '停用' && m.lineUid && duesRule(m.role) && !duesRec(yr, m.id)) add(m.lineUid); });
+      var rl = duesRules(yr);
+      db.members.forEach(function (m) { var x = duesClassOf(m, rl, yr); if (m.status !== '停用' && m.lineUid && x && x.rule && x.rule.total && !duesRec(yr, m.id)) add(m.lineUid); });
       return { uids: uids, label: yr + ' 年度會費未繳者' };
     }
     if (mode === 'pollUnvoted') {
@@ -743,7 +803,7 @@ window.Mock = (function () {
   function memberOut(m) {
     var r = BY[m.role];
     return { id: m.id, name: m.name, phone: m.phone, role: m.role, level: r ? r.level : 0, roleKnown: !!r, title: m.title, company: m.company, email: m.email,
-      joinYear: m.joinYear, status: m.status, bound: !!m.lineUid, lineName: m.lineName, boundAt: m.boundAt, note: '' };
+      joinYear: m.joinYear, duesClass: m.duesClass || '', status: m.status, bound: !!m.lineUid, lineName: m.lineName, boundAt: m.boundAt, note: '' };
   }
   function membersList() {
     return db.members.map(memberOut).sort(function (a, b) { return (b.level - a.level) || a.id.localeCompare(b.id); });
@@ -767,6 +827,7 @@ window.Mock = (function () {
         birthdays: c.perms.directory ? monthBirthdays() : [],
         polls: visiblePolls(c),
         meetings: meetingsSummary(c),
+        duesClasses: c.perms.memberManage || c.perms.duesManage ? db.duesStd.map(function (r) { return r.cls; }) : [],
         categories: { event: EVENT_CATS, news: NEWS_CATS, doc: DOC_CATS },
         catColors: { event: catColors('活動'), news: catColors('消息') },
         meetingCategories: MEETING_CATS,
@@ -988,7 +1049,7 @@ window.Mock = (function () {
       if (!m) throw err('NOT_FOUND', '找不到這位會員');
       var rec = duesRec(year, m.id);
       if (!d.paid) {
-        if (rec) { db.dues = db.dues.filter(function (r) { return r !== rec; }); audit(c, '取消會費紀錄', m.name + '（' + m.id + '）', year + ' 年度'); }
+        if (rec) { db.dues = db.dues.filter(function (r) { return r !== rec; }); audit(c, '取消會費紀錄', m.name + '（' + m.id + '）', (year - 1911) + ' 年度'); }
         return duesList(c, year);
       }
       var amt = String(d.amount === undefined || d.amount === null ? '' : d.amount).replace(/[^\d.]/g, '');
@@ -996,7 +1057,7 @@ window.Mock = (function () {
       if (isNaN(paidAt.getTime())) throw err('INVALID', '繳費日期不正確');
       var row = { year: year, memberId: m.id, name: m.name, amount: amt === '' ? null : Number(amt), paidAt: paidAt.toISOString(), method: d.method || '', note: d.note || '', recordedBy: c.member.name };
       if (rec) Object.assign(rec, row); else db.dues.push(row);
-      audit(c, '登錄會費', m.name + '（' + m.id + '）', year + ' 年度' + (row.amount !== null ? ' ' + row.amount + ' 元' : '') + (row.method ? '　' + row.method : ''));
+      audit(c, '登錄會費', m.name + '（' + m.id + '）', (year - 1911) + ' 年度' + (row.amount !== null ? ' ' + row.amount + ' 元' : '') + (row.method ? '　' + row.method : ''));
       return duesList(c, year);
     },
     calendarFeed: function (c, d) {
@@ -1375,6 +1436,7 @@ window.Mock = (function () {
       if (d.status !== undefined) m.status = d.status === '停用' ? '停用' : '啟用';
       if (d.title !== undefined && d.title !== m.title) { audit(c, '修改會員', m.name + '（' + m.id + '）', '職稱 ' + (m.title || '（空白）') + ' → ' + (d.title || '（空白）')); m.title = d.title; }
       if (d.company !== undefined) m.company = d.company;
+      if (d.duesClass !== undefined && (d.duesClass || '') !== (m.duesClass || '')) { audit(c, '修改會員', m.name + '（' + m.id + '）', '會費身分 ' + (m.duesClass || '（空白）') + ' → ' + (d.duesClass || '（空白）')); m.duesClass = d.duesClass || ''; }
       return memberOut(m);
     },
     unbindMember: function (c, d) {

@@ -16,8 +16,8 @@
    * 後端（Apps Script）也有修改時，再把 Schema.gs 的 APP_VERSION 與下面的 MIN_BACKEND_VERSION 改成同一個值；
    * 只改前端畫面時不用動後端，也不會出現「後端還是舊版本」。
    */
-  var APP_VERSION = '2026.11.05.1';
-  var MIN_BACKEND_VERSION = '2026.11.05.1';
+  var APP_VERSION = '2026.11.13.1';
+  var MIN_BACKEND_VERSION = '2026.11.13.1';
   window.APP_VERSION = APP_VERSION;
 
   /**
@@ -64,7 +64,7 @@
     evFilter: 'upcoming', newsCat: '', dirQuery: '', memQuery: '', memFilter: '',
     bindResult: null,
     push: null,
-    meetingsInfo: { count: 0, latest: null }, mtQuery: '', mtDraft: null
+    meetingsInfo: { count: 0, latest: null }, mtQuery: '', mtDraft: null, duesClasses: []
   };
   /** 個人偏好（例如活動用列表或月曆），存在這支手機；讀不到就用預設值 */
   function pref(key, value) {
@@ -387,6 +387,7 @@
     S.catColors = d.catColors || { event: {}, news: {} };
     S.meetingCategories = d.meetingCategories && d.meetingCategories.length ? d.meetingCategories : ['例會'];
     S.meetingsInfo = d.meetings || { count: 0, latest: null };
+    S.duesClasses = d.duesClasses || [];
     if (!keepCache) S.cache = {};
   }
 
@@ -1743,7 +1744,7 @@
       radio('eventUnreplied', '活動未回覆者', '限會員以上的活動，提醒還沒回覆出席或請假的人') + '<div class="choice-more" data-show="eventUnreplied"><select name="eventId2" aria-label="活動">' + evOpts + '</select></div>' +
       (openPolls.length ? radio('pollUnvoted', '調查未填寫者', '提醒還沒填寫調查的會員') + '<div class="choice-more" data-show="pollUnvoted"><select name="pollId" aria-label="調查">' + pollOpts + '</select></div>' : '') +
       (perm('duesManage') ? radio('duesUnpaid', '會費未繳者', '依「會費標準」與繳費紀錄') + '<div class="choice-more" data-show="duesUnpaid"><select name="duesYear" aria-label="年度">' +
-        [new Date().getFullYear(), new Date().getFullYear() + 1].map(function (y) { return '<option value="' + y + '"' + (Number(p.duesYear) === y ? ' selected' : '') + '>' + y + ' 年度</option>'; }).join('') + '</select></div>' : '') +
+        [new Date().getFullYear(), new Date().getFullYear() + 1].map(function (y) { return '<option value="' + y + '"' + (Number(p.duesYear) === y ? ' selected' : '') + '>' + (y - 1911) + ' 年度</option>'; }).join('') + '</select></div>' : '') +
       radio('friends', '所有加入官方帳號的好友', '包含非會員，人數最多、額度用得最快') +
       '</div><p class="estimate" id="estimate" aria-live="polite">' + estimateHtml(p.preview) + '</p></section>';
     html += '<section class="step"><h2><span class="step-n">2</span>內容</h2>' +
@@ -1918,6 +1919,10 @@
         return '<option' + (r.role === m.role ? ' selected' : '') + '>' + esc(r.role) + '</option>';
       }).join('') + '</select>', '角色決定能看到哪些內容、能使用哪些管理功能', 'm-role') +
       field('職稱', '<input id="m-title" name="title" maxlength="40" value="' + esc(m.title) + '" placeholder="例如：理事、公關主委">', '', 'm-title') +
+      (S.duesClasses.length ? field('會費身分', '<select id="m-dues" name="duesClass"><option value=""' + (!m.duesClass ? ' selected' : '') + '>自動（依職稱、入會年度、角色推定）</option>' +
+        S.duesClasses.map(function (c) { return '<option' + (c === m.duesClass ? ' selected' : '') + '>' + esc(c) + '</option>'; }).join('') +
+        (m.duesClass && S.duesClasses.indexOf(m.duesClass) < 0 ? '<option selected>' + esc(m.duesClass) + '</option>' : '') + '</select>',
+        '決定「我的」頁顯示的收費明細與合計；OB 會兄、青商二代、新會友等特殊身分在這裡選', 'm-dues') : '') +
       '<label class="check"><input type="checkbox" name="disabled"' + (m.status === '停用' ? ' checked' : '') + '><span>停用這位會員<small>停用後只能看到公開內容，也不會收到會員推播</small></span></label>' +
       '<div class="form-actions"><button type="submit" class="btn btn-primary btn-block">儲存</button></div></form>' +
       '<div class="sheet-sub"><p><b>LINE 綁定</b>　' + (m.bound ? esc(m.lineName || '已綁定') + '（' + fmtDate(m.boundAt) + '）' : '尚未綁定') + '</p>' +
@@ -2558,20 +2563,31 @@
     return n === null || n === undefined || n === '' ? '' : Number(n).toLocaleString('en-US') + ' 元';
   }
 
+  /** 收費明細：項目 → 金額，最後一列合計 */
+  function duesItemsHtml(items, total, note) {
+    var rows = (items || []).map(function (x) { return '<li><span>' + esc(x.name) + '</span><b>' + Number(x.amount).toLocaleString('en-US') + '</b></li>'; }).join('');
+    return '<ul class="dues-items">' + rows + '<li class="total"><span>合計</span><b>' + Number(total || 0).toLocaleString('en-US') + ' 元</b></li></ul>' +
+      (note ? '<p class="dues-note">' + esc(note) + '</p>' : '');
+  }
   function duesSection(me) {
     var list = me.dues || [];
     if (!list.length) return '';
     var unpaidDesc = '';
     var rows = list.map(function (x) {
       if (!x.paid && x.required && x.desc) unpaidDesc = x.desc;
-      var sub = x.paid ? '已於 ' + fmtDate(x.paid.paidAt) + ' 繳納' + (x.paid.amount ? ' ' + money(x.paid.amount) : '') + (x.paid.method ? '（' + x.paid.method + '）' : '')
-        : x.required ? '應繳' + (x.amount ? ' ' + money(x.amount) : '') : '不用繳';
-      return '<div class="dues-row"><div><b>' + x.year + ' 年度會費</b><span>' + esc(sub) + '</span></div>' +
+      var paidLine = x.paid ? '已於 ' + fmtDate(x.paid.paidAt) + ' 繳納' + (x.paid.amount ? ' ' + money(x.paid.amount) : '') + (x.paid.method ? '（' + x.paid.method + '）' : '') : '';
+      var head = '<div class="dues-row"><div><b>' + (x.roc || x.year) + ' 年度會費</b>' +
+        (x.cls ? '<span>身分：' + esc(x.cls) + (x.how && x.how !== 'set' ? '<small>（' + esc(x.howLabel || '') + '）</small>' : '') + '</span>' : '<span>不用繳</span>') + '</div>' +
         '<span class="pill ' + (x.paid ? 'is-ok' : x.required ? 'is-alert' : 'is-muted') + '">' + (x.paid ? '已繳' : x.required ? '未繳' : '免繳') + '</span></div>';
+      var body = '';
+      if (x.unknownClass) body = '<p class="hint">「會費標準」裡沒有「' + esc(x.cls) + '」這種身分，請洽財務長。</p>';
+      else if (x.required) body = duesItemsHtml(x.items, x.amount, x.note) + (x.borrowed && x.standardLabel ? '<p class="hint">' + esc(x.standardLabel) + '</p>' : '');
+      if (paidLine) body += '<p class="dues-paid">' + esc(paidLine) + '</p>';
+      return '<div class="dues-year">' + head + body + '</div>';
     }).join('');
     return '<section class="block card dues-me"><div class="block-head"><h2>會費</h2></div>' + rows +
       (unpaidDesc ? '<p class="dues-desc">' + esc(unpaidDesc) + '</p>' : '') +
-      '<p class="hint">繳費紀錄由財務長登錄，有疑問請洽財務長。</p></section>';
+      '<p class="hint">收費標準依身分（會長、理事、會友、OB 會友…）計算；繳費紀錄由財務長登錄，有疑問請洽財務長。</p></section>';
   }
 
   function viewDues() {
@@ -2582,15 +2598,26 @@
     var html = topbar({ back: 'me', title: '會費管理' }) + '<main class="view">';
     var years = d && d.years ? d.years : [cy - 1, cy, cy + 1];
     html += '<div class="seg" role="tablist" aria-label="年度">' + years.map(function (y) {
-      return '<button type="button" role="tab" aria-selected="' + (y === year) + '" data-act="duesYear" data-v="' + y + '">' + y + ' 年度</button>';
+      return '<button type="button" role="tab" aria-selected="' + (y === year) + '" data-act="duesYear" data-v="' + y + '">' + (y - 1911) + ' 年度</button>';
     }).join('') + '</div>';
     if (!d) return html + skeleton(6) + '</main>';
     if (d.__error) return html + errorBlock(d.__error) + '</main>';
     var t = d.totals;
     html += '<div class="dues-sum"><div><b>' + t.paid + '</b><span>已繳</span></div><div class="is-alert"><b>' + t.unpaid + '</b><span>未繳</span></div>' +
-      '<div><b>' + t.required + '</b><span>應繳人數</span></div><div><b>' + Number(t.collected).toLocaleString('en-US') + '</b><span>已收（元）</span></div></div>';
-    if (!d.rules.length) html += '<div class="banner is-muted">還沒有設定會費標準。請在試算表的「會費標準」工作表填寫要繳費的角色與金額。</div>';
-    else if (d.rules.some(function (r) { return r.amount === null; })) html += '<p class="hint">「會費標準」有角色還沒填金額，登錄時要自己輸入金額。</p>';
+      '<div><b>' + t.required + '</b><span>應繳人數</span></div><div class="is-money"><b>' + Number(t.collected).toLocaleString('en-US') + '</b><span>已收（元）</span></div>' +
+      '<div class="is-money"><b>' + Number(t.expected || 0).toLocaleString('en-US') + '</b><span>應收（元）</span></div></div>';
+    if (!d.hasStandards) html += '<div class="banner is-muted">還沒有設定會費標準。請在試算表的「會費標準」工作表填寫每種身分的各項金額。</div>';
+    else {
+      html += '<details class="dues-std"><summary>' + icon('coin') + '收費標準' + (d.standardLabel ? '<small>' + esc(d.standardLabel) + '</small>' : '') + '<small>' + d.standards.length + ' 種身分</small></summary>' +
+        (d.borrowed ? '<p class="hint">這個年度在「會費標準」還沒有自己的列，先沿用最近一年的標準；要調整就在工作表新增該年度的列。</p>' : '') +
+        '<div class="dues-std-list">' + d.standards.map(function (r) {
+          return '<div class="dues-std-row"><div class="dues-std-head"><b>' + esc(r.cls) + '</b><span>' + Number(r.total).toLocaleString('en-US') + ' 元</span></div>' +
+            '<p>' + (r.items.length ? r.items.map(function (x) { return esc(x.name) + ' ' + Number(x.amount).toLocaleString('en-US'); }).join('　') : '（只有合計）') + (r.note ? '　<i>' + esc(r.note) + '</i>' : '') + '</p></div>';
+        }).join('') + '</div>' +
+        '<p class="hint">每位會員繳哪一種：先看「會員」工作表的「會費身分」，沒填就依職稱（常務監事、OB主席…）、入會年度（新會友）、角色推定。OB 會兄、青商二代等請在「管理會員」設定會費身分。</p></details>';
+      var unknown = d.members.filter(function (m) { return m.unknownClass; });
+      if (unknown.length) html += '<p class="hint">這些會員的「會費身分」在標準表裡找不到：' + esc(unknown.map(function (m) { return m.name; }).join('、')) + '。</p>';
+    }
     var f = S.duesFilter;
     html += '<div class="chips" role="tablist" aria-label="篩選" style="margin-top:14px">' + [['', '全部'], ['unpaid', '未繳'], ['paid', '已繳']].map(function (x) {
       return '<button type="button" role="tab" aria-selected="' + (f === x[0]) + '" data-act="duesFilter" data-v="' + x[0] + '">' + x[1] + '</button>';
@@ -2609,14 +2636,14 @@
     var list = d.members.filter(function (m) {
       if (f === 'unpaid' && (m.paid || !m.required)) return false;
       if (f === 'paid' && !m.paid) return false;
-      return !q || (m.name + m.role + m.title).toLowerCase().indexOf(q) >= 0;
+      return !q || (m.name + m.role + m.title + (m.cls || '')).toLowerCase().indexOf(q) >= 0;
     }).sort(function (a, b) { return (!!a.paid - !!b.paid) || byLevelThenName(a, b); });
     if (!list.length) return empty(f === 'unpaid' ? '大家都繳了' : '沒有符合的會員', '');
     return '<div class="rows">' + list.map(function (m) {
       return '<button type="button" class="mrow" data-act="duesEdit" data-id="' + esc(m.id) + '" data-year="' + d.year + '">' +
-        '<div class="mrow-main"><b>' + esc(m.name) + '</b><span class="dues-sub">' + esc([m.role, extraTitle(m.title, m.role)].filter(Boolean).join('　')) + '</span></div>' +
+        '<div class="mrow-main"><b>' + esc(m.name) + '</b><span class="dues-sub">' + esc([m.cls ? m.cls + (m.how && m.how !== 'set' ? '（' + (m.howLabel || '推定') + '）' : '') : '', m.role !== m.cls ? m.role : '', m.title !== m.cls ? extraTitle(m.title, m.role) : ''].filter(Boolean).join('　')) + '</span></div>' +
         '<div class="mrow-side">' + (m.paid ? '<span class="pill is-ok">已繳</span><span class="bound">' + esc(fmtMD(m.paid.paidAt)) + (m.paid.amount ? ' ' + money(m.paid.amount) : '') + '</span>'
-          : '<span class="pill is-alert">未繳</span>' + (m.amount ? '<span class="bound">' + money(m.amount) + '</span>' : '')) + '</div></button>';
+          : (m.required ? '<span class="pill is-alert">未繳</span>' : '<span class="pill is-muted">免繳</span>') + (m.amount ? '<span class="bound">' + money(m.amount) + '</span>' : '')) + '</div></button>';
     }).join('') + '</div>';
   }
   function duesSheet(m, year) {
@@ -2624,7 +2651,8 @@
     var today = tp(new Date().toISOString());
     var dateVal = p ? (function (t) { return t.y + '-' + pad(t.m) + '-' + pad(t.d); })(tp(p.paidAt)) : today.y + '-' + pad(today.m) + '-' + pad(today.d);
     var method = p ? p.method : '轉帳';
-    return '<h2 class="sheet-title">' + esc(m.name) + '<small>' + year + ' 年度會費　' + esc(m.role) + (m.amount ? '　應繳 ' + money(m.amount) : '') + '</small></h2>' +
+    return '<h2 class="sheet-title">' + esc(m.name) + '<small>' + (year - 1911) + ' 年度會費　' + esc(m.cls || m.role) + (m.cls && m.how && m.how !== 'set' ? '（' + esc(m.howLabel || '推定') + '）' : '') + '</small></h2>' +
+      (m.items && m.items.length ? '<details class="dues-sheet-items"><summary>收費明細' + (m.amount ? '　合計 ' + money(m.amount) : '') + '</summary>' + duesItemsHtml(m.items, m.amount, '') + '</details>' : (m.amount ? '<p class="hint">應繳 ' + money(m.amount) + '</p>' : '')) +
       (p ? '<div class="banner is-ok" style="margin:0 0 14px">已登錄：' + esc(fmtDate(p.paidAt)) + (p.amount ? '　' + money(p.amount) : '') + (p.recordedBy ? '　由 ' + esc(p.recordedBy) + ' 登錄' : '') + '</div>' : '') +
       '<form class="form" data-form="dues" novalidate><input type="hidden" name="memberId" value="' + esc(m.id) + '"><input type="hidden" name="year" value="' + year + '">' +
       '<div class="field-row">' + field('金額', '<input id="du-amt" name="amount" type="number" min="0" inputmode="numeric" value="' + esc(p && p.amount !== null ? p.amount : (m.amount || '')) + '">', '', 'du-amt') +
@@ -3456,7 +3484,7 @@
           text: ev && type === 'unreplied' ? fmtWhen(ev.start, ev.end) + (ev.location ? ' ' + ev.location : '') + '\n請到會員專區回覆出席或請假，謝謝。' : '' });
       } else if (type === 'dues') {
         var dd = S.cache['dues:' + id];
-        Object.assign(S.push, { mode: 'duesUnpaid', duesYear: id, linkType: 'home', title: id + ' 年度會費繳交提醒',
+        Object.assign(S.push, { mode: 'duesUnpaid', duesYear: id, linkType: 'home', title: (Number(id) - 1911) + ' 年度會費繳交提醒',
           text: '提醒您 ' + id + ' 年度會費尚未繳交' + (dd && dd.note ? '。\n' + dd.note : '，繳費方式請洽財務長。') + '\n已繳交者請忽略，謝謝！' });
       } else if (type === 'poll') {
         var pl = S.cache['poll:' + id] || S.polls.filter(function (x) { return x.id === id; })[0];
@@ -3942,11 +3970,13 @@
     member: function (form, btn) {
       var fd = new FormData(form);
       var data = { id: fd.get('id'), role: fd.get('role'), title: fd.get('title'), status: fd.get('disabled') === 'on' ? '停用' : '啟用' };
+      if (fd.has('duesClass')) data.duesClass = fd.get('duesClass') || '';
       if (data.id === (S.me.member && S.me.member.id) && (roleLevel(data.role) < S.me.level || data.status === '停用')) {
         toast('為避免把自己鎖在外面，請到試算表修改自己的角色或狀態', 'error');
         return;
       }
       busy(btn, Api.call('updateMember', data)).then(function (m) {
+        invalidate('dues:');
         closeSheet();
         replaceMember(m);
         toast('已儲存');
